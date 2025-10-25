@@ -81,13 +81,13 @@ The system uses a distance-based posture evaluation method:
 ## System Architecture
 
 ```
-┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
-│   Camera Input  │───▶│  MediaPipe Pose  │───▶│ Landmark Points │
-└─────────────────┘    └──────────────────┘    └─────────────────┘
-                                                         │
-┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
-│ Visual Feedback │◀───│ Posture Analysis │◀───│ Distance Calc.  │
-└─────────────────┘    └──────────────────┘    └─────────────────┘
+┌─────────────────┐     ┌──────────────────┐     ┌─────────────────┐
+│   Camera Input  │───▶ │  MediaPipe Pose  │───▶│ Landmark Points │
+└─────────────────┘     └──────────────────┘     └─────────────────┘
+                                                          │
+┌─────────────────┐     ┌──────────────────┐      ┌─────────────────┐
+│ Visual Feedback │◀─── │ Posture Analysis │◀─── │ Distance Calc.  │
+└─────────────────┘     └──────────────────┘      └─────────────────┘
 ```
 
 ## Configuration Parameters
