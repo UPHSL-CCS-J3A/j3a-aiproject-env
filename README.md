@@ -137,10 +137,11 @@ This project is developed for academic purposes as part of the UPHSL CCS J3A cou
 
 ## Contributors
 
-- **Student**: [Your Name]
+- **Student**: Alvez, Funelas, Rivera, Torculas
 - **Course**: CCS J3A
 - **Institution**: University of Perpetual Help System Laguna
 - **Academic Year**: 2024-2025
+- **Group**: .env
 
 ---
 
