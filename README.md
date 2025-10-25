@@ -1,69 +1,45 @@
-# Real-Time Posture Detection System
+# **GROUP .ENV: Real-Time Posture Detection**
 
-[![Open in Visual Studio Code](https://classroom.github.com/assets/open-in-vscode-2e0aaae1b6195c2367325f4f02e2d04e9abb55f0b24a779b69b11b9e10269abc.svg)](https://classroom.github.com/online_ide?assignment_repo_id=21282326&assignment_repo_type=AssignmentRepo)
+## Problem Statement
+> - Poor posture is a common problem among students, office workers, and computer users. Sitting for long periods with bad posture can cause back pain, neck strain, and long-term spinal issues. Many users are unaware when they start slouching. This AI system aims to detect poor posture in real time and alert the user before health issues develop.
 
-### Problem Description
-Poor posture has become a widespread issue due to prolonged sitting and computer usage among students and professionals. Continuous slouching or improper body alignment leads to musculoskeletal problems, including neck strain, back pain, and fatigue. Traditional posture correction methods—such as wearable devices or manual observation—can be expensive, intrusive, or unreliable.  
-This project aims to address these limitations by providing a camera-based, real-time AI solution that monitors posture non-intrusively and gives immediate feedback.
+## Proposed Solution Overview
+> - The system uses a webcam and AI-based human pose estimation **(MediaPipe Pose)** to track key body points such as the nose and shoulders. It measures the vertical distance between the nose and shoulders to determine whether the user is maintaining an upright position.
+> - After calibration, the system continuously monitors posture — displaying **“GOOD POSTURE”** in green when upright and **“BAD POSTURE”** in red when slouching. The program provides visual feedback on-screen, and can be extended to include sound alerts or reminders.
 
----
+## PEAS Model
+|Performance Measure | Environment | Actuators | Sensors | 
+| ------ | ------ | ------ | ------ |
+| Posture detection accuracy (correct classification of good vs. bad posture), real-time responsiveness, and user awareness (how often users correct their posture after feedback). | Virtual environment using the user’s webcam feed in real time. Operates indoors with stable lighting and a clear upper-body view. | Visual display through the OpenCV window: colored lines, posture labels ("GOOD" / "BAD"), and optional text instructions for calibration. | Webcam camera acts as the main sensor; MediaPipe Pose extracts key landmark coordinates (nose, left shoulder, right shoulder). | 
 
-### Proposed Solution Overview
-The **Real-Time Posture Detection System** is a computer vision-based AI application that uses a webcam and MediaPipe’s pose estimation technology to detect and evaluate the user’s posture.  
-It identifies key body landmarks (such as the nose, shoulders, and spine) and measures vertical distances between them. By comparing the live measurements with a calibrated reference posture, the system classifies the user’s posture as good or poor. Visual indicators on the screen provide instant feedback to help users correct their posture in real time.
+## AI Concepts Used
+| Intelligent Agent Type | Search or Optimization Strategy | Learning or Decision Component (if applicable) | 
+| ----- | ----- | ----- |
+|**Model-based reflex agent** – it uses a model of the human body posture (nose–shoulder distance) and reacts accordingly by classifying posture as good or bad. | Not a search-based system, but uses **threshold-based decision logic** to minimize deviation from the calibrated reference distance. (You can describe this as a simple **optimization** where the goal is to keep the posture distance close to the ideal reference.) | Uses **calibration-based learning** — the system learns the user’s reference (good) posture when they press ‘C’, and compares future postures to that baseline. Decision-making is based on deviation thresholds (if difference < 0.02 → good posture). |
 
----
+## System Architecture Diagram
 
-### PEAS Model
-
-| **Component** | **Description** |
-|----------------|-----------------|
-| **Performance Measure** | Accuracy of posture detection, response time for visual feedback, and reduced time spent in poor posture |
-| **Environment** | Physical environment using a webcam connected to a computer; operates in real time via a virtual interface |
-| **Actuators** | Visual indicators on screen (color-coded status), calibration controls, and potential audio feedback |
-| **Sensors** | Webcam for live video capture; pose estimation detects nose and shoulder landmarks using MediaPipe |
-
----
-
-### AI Concepts Used
-
-| **AI Concept** | **Implementation and Justification** |
-|----------------|--------------------------------------|
-| **Intelligent Agent Type** | Model-based reflex agent – reacts instantly to posture deviations based on visual data and calibration reference |
-| **Search or Optimization Strategy** | Uses optimization in pose landmark tracking and distance calculation to ensure stable and accurate keypoint detection |
-| **Learning or Decision Component** | Employs supervised calibration logic that learns the user’s ideal posture reference; applies decision rules for good or bad posture detection |
-
----
-
-### System Architecture Diagram 
-
+```mermaid
+graph TD
+    A(Start) --> B[Open / Activate Camera]
+    B --> C[Detect Pose → Nose and Shoulder]
+    C --> D{Is 'C' Key Pressed?}
+    D -->|Yes| E[Calibrate and Store Reference]
+    E --> F
+    D -->|No| F[Compare Current Posture to Reference]
+    F --> G{Is Deviation < 0.02?}
+    G -->|Yes| H[Display GOOD POSTURE]
+    G -->|No| I[Display BAD POSTURE]
 ```
-┌────────────────────────────┐
-│ Camera Input               │
-│ (Webcam / Video Stream)    │
-└────────────┬───────────────┘
-             │
-             ▼
-┌────────────────────────────┐
-│ MediaPipe Pose Detection   │
-│ (Keypoint Landmark Capture)│
-└────────────┬───────────────┘
-             │
-             ▼
-┌────────────────────────────┐
-│ Distance Calculation        │
-│ (Nose-to-Shoulder Metric)   │
-└────────────┬───────────────┘
-             │
-             ▼
-┌────────────────────────────┐
-│ Posture Evaluation          │
-│ (Compare vs Calibration)    │
-└────────────┬───────────────┘
-             │
-             ▼
-┌────────────────────────────┐
-│ Visual Feedback System      │
-│ (Green = Good, Red = Bad)   │
-└────────────────────────────┘
-```
+
+## Contributors
+### Presenters
+- Zyrus Alvez
+- France Raphael Rivera
+- Richard Torculas
+### Presentation Creator
+- Allan John Funelas
+
+## Presentation Link
+`Click Here ->`
+[Canva Presentation Link](https://www.canva.com/design/DAG2y6pdYQY/ScdPUmw5GfVrm7Tsbt9qoQ/edit?utm_content=DAG2y6pdYQY&utm_campaign=designshare&utm_medium=link2&utm_source=sharebutton)
