@@ -2,147 +2,68 @@
 
 [![Open in Visual Studio Code](https://classroom.github.com/assets/open-in-vscode-2e0aaae1b6195c2367325f4f02e2d04e9abb55f0b24a779b69b11b9e10269abc.svg)](https://classroom.github.com/online_ide?assignment_repo_id=21282326&assignment_repo_type=AssignmentRepo)
 
-## Overview
-
-A real-time computer vision application that monitors and evaluates user posture using webcam input. The system employs MediaPipe's pose estimation technology to detect body landmarks and provides immediate visual feedback on posture quality through a calibration-based approach.
-
-## Features
-
-- **Real-time pose detection** using MediaPipe Pose estimation
-- **Calibration system** for personalized posture reference
-- **Visual feedback** with color-coded status indicators
-- **Live metrics display** showing nose-to-shoulder distance measurements
-- **Interactive controls** for calibration and system management
-
-## Technical Implementation
-
-### Core Technologies
-- **OpenCV**: Computer vision and video processing
-- **MediaPipe**: Google's pose estimation framework
-- **Python**: Primary programming language
-
-### Algorithm Approach
-The system uses a distance-based posture evaluation method:
-1. Detects key body landmarks (nose, left shoulder, right shoulder)
-2. Calculates vertical distance between nose and shoulder midpoint
-3. Compares current measurements against calibrated reference
-4. Provides real-time feedback based on deviation threshold
-
-## Installation
-
-### Prerequisites
-- Python 3.7 or higher
-- Webcam/camera device
-- Windows/macOS/Linux operating system
-
-### Setup Instructions
-
-1. **Clone the repository**
-   ```bash
-   git clone <repository-url>
-   cd j3a-aiproject-env
-   ```
-
-2. **Install dependencies**
-   ```bash
-   pip install -r requirements.txt
-   ```
-
-3. **Run the application**
-   ```bash
-   python main.py
-   ```
-
-## Usage Guide
-
-### Initial Setup
-1. Launch the application
-2. Position yourself in front of the camera with good posture
-3. Press **'C'** to calibrate your reference posture
-4. The system will now monitor your posture in real-time
-
-### Controls
-| Key | Function |
-|-----|----------|
-| `C` | Calibrate current posture as reference |
-| `R` | Recalibrate with new reference posture |
-| `Q` | Quit application |
-
-### Visual Indicators
-- **Green**: Good posture (within acceptable range)
-- **Red**: Poor posture (deviation detected)
-- **Yellow**: Awaiting calibration
-
-### On-Screen Information
-- Current posture status
-- Real-time nose-to-shoulder distance measurement
-- Calibration instructions and controls
-
-## System Architecture
-
-```
-┌─────────────────┐     ┌──────────────────┐     ┌─────────────────┐
-│   Camera Input  │───▶ │  MediaPipe Pose  │───▶│ Landmark Points │
-└─────────────────┘     └──────────────────┘     └─────────────────┘
-                                                          │
-┌─────────────────┐     ┌──────────────────┐      ┌─────────────────┐
-│ Visual Feedback │◀─── │ Posture Analysis │◀─── │ Distance Calc.  │
-└─────────────────┘     └──────────────────┘      └─────────────────┘
-```
-
-## Configuration Parameters
-
-- **Detection Confidence**: 0.5 (minimum confidence for pose detection)
-- **Tracking Confidence**: 0.5 (minimum confidence for landmark tracking)
-- **Posture Threshold**: 0.02 (acceptable deviation from reference)
-
-## Development Log
-
-Detailed development progress and technical decisions are documented in the `devlogs/` directory:
-- [2025-10-25.md](devlogs/2025-10-25.md) - Initial implementation and testing
-
-## Known Issues
-
-- Keyboard input may not respond on certain hardware configurations
-- Performance may vary based on lighting conditions and camera quality
-- Requires stable camera positioning for accurate measurements
-
-## Future Enhancements
-
-- Audio alerts for posture correction
-- Session data logging and analytics
-- Multi-angle posture assessment
-- Adaptive thresholding based on user characteristics
-- Mobile application development
-
-## Academic Context
-
-This project demonstrates practical application of:
-- Computer vision techniques
-- Real-time image processing
-- Human pose estimation
-- User interface design
-- Software engineering principles
-
-## Dependencies
-
-```
-mediapipe>=0.10.0
-opencv-python>=4.8.0
-```
-
-## License
-
-This project is developed for academic purposes as part of the UPHSL CCS J3A coursework.
-
-## Contributors
-
-- **Student**: Alvez, Funelas, Rivera, Torculas
-- **Course**: CCS J3A
-- **Institution**: University of Perpetual Help System Laguna
-- **Academic Year**: 2024-2025
-- **Group**: .env
+### Problem Description
+Poor posture has become a widespread issue due to prolonged sitting and computer usage among students and professionals. Continuous slouching or improper body alignment leads to musculoskeletal problems, including neck strain, back pain, and fatigue. Traditional posture correction methods—such as wearable devices or manual observation—can be expensive, intrusive, or unreliable.  
+This project aims to address these limitations by providing a camera-based, real-time AI solution that monitors posture non-intrusively and gives immediate feedback.
 
 ---
 
-*For technical support or questions regarding this implementation, please refer to the development logs or contact the project maintainer.*
+### Proposed Solution Overview
+The **Real-Time Posture Detection System** is a computer vision-based AI application that uses a webcam and MediaPipe’s pose estimation technology to detect and evaluate the user’s posture.  
+It identifies key body landmarks (such as the nose, shoulders, and spine) and measures vertical distances between them. By comparing the live measurements with a calibrated reference posture, the system classifies the user’s posture as good or poor. Visual indicators on the screen provide instant feedback to help users correct their posture in real time.
+
+---
+
+### PEAS Model
+
+| **Component** | **Description** |
+|----------------|-----------------|
+| **Performance Measure** | Accuracy of posture detection, response time for visual feedback, and reduced time spent in poor posture |
+| **Environment** | Physical environment using a webcam connected to a computer; operates in real time via a virtual interface |
+| **Actuators** | Visual indicators on screen (color-coded status), calibration controls, and potential audio feedback |
+| **Sensors** | Webcam for live video capture; pose estimation detects nose and shoulder landmarks using MediaPipe |
+
+---
+
+### AI Concepts Used
+
+| **AI Concept** | **Implementation and Justification** |
+|----------------|--------------------------------------|
+| **Intelligent Agent Type** | Model-based reflex agent – reacts instantly to posture deviations based on visual data and calibration reference |
+| **Search or Optimization Strategy** | Uses optimization in pose landmark tracking and distance calculation to ensure stable and accurate keypoint detection |
+| **Learning or Decision Component** | Employs supervised calibration logic that learns the user’s ideal posture reference; applies decision rules for good or bad posture detection |
+
+---
+
+### System Architecture Diagram 
+
+```
+┌────────────────────────────┐
+│ Camera Input               │
+│ (Webcam / Video Stream)    │
+└────────────┬───────────────┘
+             │
+             ▼
+┌────────────────────────────┐
+│ MediaPipe Pose Detection   │
+│ (Keypoint Landmark Capture)│
+└────────────┬───────────────┘
+             │
+             ▼
+┌────────────────────────────┐
+│ Distance Calculation        │
+│ (Nose-to-Shoulder Metric)   │
+└────────────┬───────────────┘
+             │
+             ▼
+┌────────────────────────────┐
+│ Posture Evaluation          │
+│ (Compare vs Calibration)    │
+└────────────┬───────────────┘
+             │
+             ▼
+┌────────────────────────────┐
+│ Visual Feedback System      │
+│ (Green = Good, Red = Bad)   │
+└────────────────────────────┘
+```
