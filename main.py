@@ -14,19 +14,52 @@ ref_nose_shoulder_dist = None
 calibrated = False
 
 # GIF Setup
-gif_path = "./assets/cropped_ergonomics.gif"
-gif = Image.open(gif_path)
-gif_frames = []
-durations = []
-try:
-    while True:
-        frame = cv2.cvtColor(np.array(gif.convert("RGBA")), cv2.COLOR_RGBA2BGRA)
-        gif_frames.append(frame)
-        durations.append(gif.info.get('duration', 100))
-        gif.seek(gif.tell() + 1)
-except EOFError:
-    pass
-gif_index = 0
+class GIFObject:
+    def __init__(self, path):
+        self.gif = Image.open(path)
+        self.frames = []
+        self.durations = []
+        try:
+            while True:
+                frame = cv2.cvtColor(np.array(self.gif.convert("RGBA")), cv2.COLOR_RGBA2BGRA)
+                self.frames.append(frame)
+                self.durations.append(self.gif.info.get('duration', 100))
+                self.gif.seek(self.gif.tell() + 1)
+        except EOFError:
+            pass
+        self.index = 0
+    def overlay_next_frame(self, target_frame, size_multiplier=0.65, padding=10):
+            """
+            Overlay the next GIF frame onto the target frame with alpha blending.
+
+            Args:
+                target_frame: The main OpenCV frame to overlay onto (BGR).
+                position: "upper-right", "upper-left", etc. (currently only upper-right implemented)
+                size_multiplier: Scale factor for GIF size.
+                padding: Padding from the window edge.
+            """
+            # Get next frame
+            gif_frame = self.frames[self.index]
+            self.index = (self.index + 1) % len(self.frames)
+
+            # Resize frame
+            width = int(gif_frame.shape[1] * size_multiplier)
+            height = int(gif_frame.shape[0] * size_multiplier)
+            gif_frame = cv2.resize(gif_frame, (width, height))
+
+            # Determine overlay position
+            h_gif, w_gif = gif_frame.shape[:2]
+            y1, y2 = padding, padding + h_gif
+            x1, x2 = target_frame.shape[1] - w_gif - padding, target_frame.shape[1] - padding
+
+            # Alpha blending
+            alpha_gif = gif_frame[:, :, 3] / 255.0
+            alpha_frame = 1.0 - alpha_gif
+            for c in range(0, 3):
+                target_frame[y1:y2, x1:x2, c] = alpha_gif * gif_frame[:, :, c] + alpha_frame * target_frame[y1:y2, x1:x2, c]
+
+intro_gif = GIFObject("./assets/cropped_ergonomics.gif")
+
 while True:
     ret, frame = cap.read()
     if not ret: break
@@ -84,17 +117,9 @@ while True:
             cv2.putText(frame, "Press 'R' to recalibrate", (20,130), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255,255,255), 1)
 
         if not calibrated:
-            size_multiplier = 0.65
-            width = 329 * size_multiplier
-            height = 230 * size_multiplier
-            gif_frame = cv2.resize(gif_frames[gif_index], (int(width), int(height)))  # adjust size
-            y1, y2 = 10, 10 + gif_frame.shape[0]
-            x1, x2 = frame.shape[1] - gif_frame.shape[1] - 10, frame.shape[1] - 10
-            alpha_gif = gif_frame[:, :, 3] / 255.0
-            alpha_frame = 1.0 - alpha_gif
-            for c in range(0,3):
-                frame[y1:y2, x1:x2, c] = (alpha_gif * gif_frame[:, :, c] + alpha_frame * frame[y1:y2, x1:x2, c])
-            gif_index = (gif_index + 1) % len(gif_frames)
+            intro_gif.overlay_next_frame(frame, 0.65)
+
+
     cv2.imshow('Posture Detection', frame)
     key = cv2.waitKey(1)&0xFF
     if key == ord('q'): break
