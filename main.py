@@ -1,4 +1,6 @@
 import cv2, mediapipe as mp, math, time
+from PIL import Image
+import numpy as np
 mp_pose = mp.solutions.pose
 mp_draw = mp.solutions.drawing_utils
 pose = mp_pose.Pose(min_detection_confidence=0.5, min_tracking_confidence=0.5)
@@ -11,6 +13,20 @@ statuschange_starttime = None
 ref_nose_shoulder_dist = None
 calibrated = False
 
+# GIF Setup
+gif_path = "./assets/cropped_ergonomics.gif"
+gif = Image.open(gif_path)
+gif_frames = []
+durations = []
+try:
+    while True:
+        frame = cv2.cvtColor(np.array(gif.convert("RGBA")), cv2.COLOR_RGBA2BGRA)
+        gif_frames.append(frame)
+        durations.append(gif.info.get('duration', 100))
+        gif.seek(gif.tell() + 1)
+except EOFError:
+    pass
+gif_index = 0
 while True:
     ret, frame = cap.read()
     if not ret: break
@@ -66,7 +82,19 @@ while True:
         cv2.putText(frame, f"Nose-Shoulder Dist: {nose_shoulder_dist:.3f}", (20,90), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255,255,255), 1)
         if calibrated:
             cv2.putText(frame, "Press 'R' to recalibrate", (20,130), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255,255,255), 1)
-    
+
+        if not calibrated:
+            size_multiplier = 0.65
+            width = 329 * size_multiplier
+            height = 230 * size_multiplier
+            gif_frame = cv2.resize(gif_frames[gif_index], (int(width), int(height)))  # adjust size
+            y1, y2 = 10, 10 + gif_frame.shape[0]
+            x1, x2 = frame.shape[1] - gif_frame.shape[1] - 10, frame.shape[1] - 10
+            alpha_gif = gif_frame[:, :, 3] / 255.0
+            alpha_frame = 1.0 - alpha_gif
+            for c in range(0,3):
+                frame[y1:y2, x1:x2, c] = (alpha_gif * gif_frame[:, :, c] + alpha_frame * frame[y1:y2, x1:x2, c])
+            gif_index = (gif_index + 1) % len(gif_frames)
     cv2.imshow('Posture Detection', frame)
     key = cv2.waitKey(1)&0xFF
     if key == ord('q'): break
