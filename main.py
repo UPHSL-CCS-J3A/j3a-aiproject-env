@@ -75,8 +75,8 @@ class GIFObject:
         
         # --- Determine overlay position (upper-right) ---
         h_gif, w_gif = gif_frame.shape[:2]
-        y1, y2 = padding, padding + h_gif
-        x1, x2 = target_frame.shape[1] - w_gif - padding, target_frame.shape[1] - padding
+        y1, y2 = int(padding), int(padding + h_gif)
+        x1, x2 = int(target_frame.shape[1] - w_gif - padding), int(target_frame.shape[1] - padding)
 
         # --- Alpha blending ---
         alpha_gif = gif_frame[:, :, 3] / 255.0
@@ -89,7 +89,7 @@ class GIFObject:
 
 intro_gif = GIFObject("./assets/cropped_ergonomics.gif")
 bad_gif = GIFObject("./assets/car.gif")
-good_gif = GIFObject("./assets/dance.gif", 300)
+good_gif = GIFObject("./assets/full-ergonomics.gif", 300)
 # Sound Setup
 pygame.mixer.init()
 sounds = {
