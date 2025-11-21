@@ -1,5 +1,5 @@
 import cv2, mediapipe as mp, math, time
-from PIL import Image
+from PIL import Image, ImageTk
 import numpy as np
 import pygame
 import customtkinter as ctk
@@ -14,6 +14,120 @@ stable_status = "GOOD POSTURE"
 stable_action = "GOOD DISTANCE"
 statuschange_delay = 2
 statuschange_starttime = None
+def run_posture_detection():
+    global calibrated, prev_status, stable_status, statuschange_starttime
+    BUTTON_W, BUTTON_H = 50, 50
+    PADDING = 20
+
+    params = {"button_rect": [0,0,0,0]}
+    cv2.namedWindow("Posture Detection")
+    cv2.setMouseCallback("Posture Detection", click_event, param=params)
+   
+    while True:
+        ret, frame = cap.read()
+        if not ret: break
+        h, w = frame.shape[:2]
+        img = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        res = pose.process(img)
+        
+        if res.pose_landmarks:
+            # Draw pose landmarks | Identified Parts of the User From Webcam
+            mp_draw.draw_landmarks(frame, res.pose_landmarks, mp_pose.POSE_CONNECTIONS)
+            lm = res.pose_landmarks.landmark
+            
+            # Get key points
+            L = lm[mp_pose.PoseLandmark.LEFT_SHOULDER]
+            R = lm[mp_pose.PoseLandmark.RIGHT_SHOULDER]
+            nose = lm[mp_pose.PoseLandmark.NOSE]
+            L_z = L.z
+            R_z = R.z
+            # Convert to pixel coordinates
+            L_px = (int(L.x*w), int(L.y*h))
+            R_px = (int(R.x*w), int(R.y*h))
+            nose_px = (int(nose.x*w), int(nose.y*h))
+            neck_px = ((L_px[0]+R_px[0])//2, (L_px[1]+R_px[1])//2)
+            
+            # Calculate current posture using nose to shoulder y-distance
+            shoulder_y = (L.y + R.y) / 2  # average shoulder y position
+            nose_shoulder_dist = abs(nose.y - shoulder_y)
+            
+            # Determine posture status
+            if calibrated:
+                # Adjusted Logic for Recommended Actions
+                scale_factor = shoulder_y / ref_shoulder_y
+                dist_diff = nose_shoulder_dist - ref_nose_shoulder_dist * scale_factor
+                shoulder_depth_diff = ((L.z + R.z)/2) - ref_shoulder_z
+                nose_depth_diff = nose.z - ref_nose_z
+                good_posture = abs(dist_diff) < 0.02 * scale_factor # threshold for good posture
+                current_status = "GOOD POSTURE" if good_posture else "BAD POSTURE"
+                current_action = "MOVE FARTHER FROM CAMERA" if nose_depth_diff < -0.5 else "CHIN UP" if (dist_diff < 0.01 * scale_factor) else "CHIN DOWN" if (dist_diff > 0.03 * scale_factor) else "GOOD DISTANCE"
+                if current_status != stable_status:
+                    if statuschange_starttime is None:
+                        statuschange_starttime = time.time()
+                    elif time.time() - statuschange_starttime > statuschange_delay:
+                        stable_status = current_status
+                        statuschange_starttime = None
+                else:
+                    statuschange_starttime = None
+                status = stable_status
+                action = current_action
+            else:
+                status = "PRESS 'C' TO CALIBRATE"
+            
+            color = (0,255,0) if (calibrated and status == "GOOD POSTURE") else (0,0,255) if (calibrated and status == "BAD POSTURE") else (255,255,0)
+            if status == "BAD POSTURE":
+                bad_gif.overlay_next_frame(frame)
+                if prev_status != "BAD POSTURE":
+                    print("Plays Music")
+                    pygame.mixer.stop()
+                    sounds["bad"].play(loops=-1)
+            elif status == "GOOD POSTURE":
+                good_gif.overlay_next_frame(frame)
+                if prev_status != "GOOD POSTURE":
+                    pygame.mixer.stop()
+                    sounds["good"].play(loops=-1)
+            prev_status = status
+            # Draw visual feedback
+            base_y = 50
+            cv2.line(frame, L_px, R_px, color, 3)  # shoulder line
+            cv2.line(frame, neck_px, nose_px, color, 2)  # neck line
+            cv2.circle(frame, nose_px, 8, color, -1)  # nose point
+            cv2.putText(frame, status, (20, base_y), cv2.FONT_HERSHEY_SIMPLEX, 1, color, 2)
+            cv2.putText(frame, f"Nose-Shoulder Dist: {nose_shoulder_dist:.3f}", (20,base_y + 40), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255,255,255), 1)
+            # --- Compute lower-right button position ---
+            bx = w - BUTTON_W - PADDING
+            by = h - BUTTON_H - PADDING
+            button_rect = [bx, by, BUTTON_W, BUTTON_H]
+            params["button_rect"] = button_rect
+
+            # --- Draw button ---
+            cv2.rectangle(frame, (bx, by), (bx + BUTTON_W, by + BUTTON_H), (0, 200, 0), -1)
+            cv2.putText(frame, "Settings", (bx + 10, by + 35), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255,255,255), 2)
+            if calibrated:
+                cv2.putText(frame, "Press 'R' to recalibrate", (20,base_y + 80), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255,255,255), 1)
+                cv2.putText(frame, action, (20, base_y + 100), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255), 1)
+            
+
+            if not calibrated:
+                intro_gif.overlay_next_frame(frame, 0.65)
+
+
+        cv2.imshow('Posture Detection', frame)
+        key = cv2.waitKey(1)&0xFF
+        if key == ord('q'): break
+        elif key == ord('c') or key == ord('r'):
+            if res.pose_landmarks:
+                lm = res.pose_landmarks.landmark
+                L = lm[mp_pose.PoseLandmark.LEFT_SHOULDER]
+                R = lm[mp_pose.PoseLandmark.RIGHT_SHOULDER]
+                nose = lm[mp_pose.PoseLandmark.NOSE]
+                ref_nose_z = nose.z
+                ref_shoulder_z = (L.z + R.z) / 2
+                shoulder_y = ref_shoulder_y = (L.y + R.y) / 2
+                ref_nose_shoulder_dist = abs(nose.y - shoulder_y)
+                calibrated = True
+                print("Calibrated! Current posture set as reference.")
+    cap.release(); cv2.destroyAllWindows()
 # Calibration variables
 ref_nose_shoulder_dist = None
 calibrated = False
@@ -210,10 +324,12 @@ class SettingsWindow:
 
     def show_preview(self, index, filepath):
         img = Image.open(filepath)
-        img.thumbnail((100, 100))  # scale to max 100x100 pixels
-        img_tk = ImageTk.PhotoImage(img)
-        self.preview_labels[index].configure(image=img_tk, text="")
-        self.preview_labels[index].image = img_tk
+        img.thumbnail((100, 100))
+
+        preview_img = ctk.CTkImage(light_image=img, dark_image=img, size=(100, 100))
+        self.preview_labels[index].configure(image=preview_img, text="")
+        self.preview_labels[index].image = preview_img
+
 
 
 def click_event(event, x, y, flags, param):
@@ -222,120 +338,12 @@ def click_event(event, x, y, flags, param):
         bx, by, bw, bh = param["button_rect"]
         if bx <= x <= bx + bw and by <= y <= by + bh:
             settings.spawn()
-            app.mainloop()
 app = ctk.CTk()
 app.withdraw()
 settings = SettingsWindow()
-
-BUTTON_W, BUTTON_H = 50, 50
-PADDING = 20
-
-params = {"button_rect": [0,0,0,0]}
-
-cv2.namedWindow("Posture Detection")
-cv2.setMouseCallback("Posture Detection",click_event, param=params)
-while True:
-    ret, frame = cap.read()
-    if not ret: break
-    h, w = frame.shape[:2]
-    img = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-    res = pose.process(img)
-    
-    if res.pose_landmarks:
-        # Draw pose landmarks | Identified Parts of the User From Webcam
-        mp_draw.draw_landmarks(frame, res.pose_landmarks, mp_pose.POSE_CONNECTIONS)
-        lm = res.pose_landmarks.landmark
-        
-        # Get key points
-        L = lm[mp_pose.PoseLandmark.LEFT_SHOULDER]
-        R = lm[mp_pose.PoseLandmark.RIGHT_SHOULDER]
-        nose = lm[mp_pose.PoseLandmark.NOSE]
-        L_z = L.z
-        R_z = R.z
-        # Convert to pixel coordinates
-        L_px = (int(L.x*w), int(L.y*h))
-        R_px = (int(R.x*w), int(R.y*h))
-        nose_px = (int(nose.x*w), int(nose.y*h))
-        neck_px = ((L_px[0]+R_px[0])//2, (L_px[1]+R_px[1])//2)
-        
-        # Calculate current posture using nose to shoulder y-distance
-        shoulder_y = (L.y + R.y) / 2  # average shoulder y position
-        nose_shoulder_dist = abs(nose.y - shoulder_y)
-        
-        # Determine posture status
-        if calibrated:
-            # Adjusted Logic for Recommended Actions
-            scale_factor = shoulder_y / ref_shoulder_y
-            dist_diff = nose_shoulder_dist - ref_nose_shoulder_dist * scale_factor
-            shoulder_depth_diff = ((L.z + R.z)/2) - ref_shoulder_z
-            nose_depth_diff = nose.z - ref_nose_z
-            good_posture = abs(dist_diff) < 0.02 * scale_factor # threshold for good posture
-            current_status = "GOOD POSTURE" if good_posture else "BAD POSTURE"
-            current_action = "MOVE FARTHER FROM CAMERA" if nose_depth_diff < -0.5 else "CHIN UP" if (dist_diff < 0.01 * scale_factor) else "CHIN DOWN" if (dist_diff > 0.03 * scale_factor) else "GOOD DISTANCE"
-            if current_status != stable_status:
-                if statuschange_starttime is None:
-                    statuschange_starttime = time.time()
-                elif time.time() - statuschange_starttime > statuschange_delay:
-                    stable_status = current_status
-                    statuschange_starttime = None
-            else:
-                statuschange_starttime = None
-            status = stable_status
-            action = current_action
-        else:
-            status = "PRESS 'C' TO CALIBRATE"
-        
-        color = (0,255,0) if (calibrated and status == "GOOD POSTURE") else (0,0,255) if (calibrated and status == "BAD POSTURE") else (255,255,0)
-        if status == "BAD POSTURE":
-            bad_gif.overlay_next_frame(frame)
-            if prev_status != "BAD POSTURE":
-                print("Plays Music")
-                pygame.mixer.stop()
-                sounds["bad"].play(loops=-1)
-        elif status == "GOOD POSTURE":
-            good_gif.overlay_next_frame(frame)
-            if prev_status != "GOOD POSTURE":
-                pygame.mixer.stop()
-                sounds["good"].play(loops=-1)
-        prev_status = status
-        # Draw visual feedback
-        base_y = 50
-        cv2.line(frame, L_px, R_px, color, 3)  # shoulder line
-        cv2.line(frame, neck_px, nose_px, color, 2)  # neck line
-        cv2.circle(frame, nose_px, 8, color, -1)  # nose point
-        cv2.putText(frame, status, (20, base_y), cv2.FONT_HERSHEY_SIMPLEX, 1, color, 2)
-        cv2.putText(frame, f"Nose-Shoulder Dist: {nose_shoulder_dist:.3f}", (20,base_y + 40), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255,255,255), 1)
-        # --- Compute lower-right button position ---
-        bx = w - BUTTON_W - PADDING
-        by = h - BUTTON_H - PADDING
-        button_rect = [bx, by, BUTTON_W, BUTTON_H]
-        params["button_rect"] = button_rect
-
-        # --- Draw button ---
-        cv2.rectangle(frame, (bx, by), (bx + BUTTON_W, by + BUTTON_H), (0, 200, 0), -1)
-        cv2.putText(frame, "Settings", (bx + 10, by + 35), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255,255,255), 2)
-        if calibrated:
-            cv2.putText(frame, "Press 'R' to recalibrate", (20,base_y + 80), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255,255,255), 1)
-            cv2.putText(frame, action, (20, base_y + 100), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255), 1)
-        
-
-        if not calibrated:
-            intro_gif.overlay_next_frame(frame, 0.65)
+cv_thread = Thread(target=run_posture_detection, daemon=True)
+cv_thread.start()
+app.mainloop()
 
 
-    cv2.imshow('Posture Detection', frame)
-    key = cv2.waitKey(1)&0xFF
-    if key == ord('q'): break
-    elif key == ord('c') or key == ord('r'):
-        if res.pose_landmarks:
-            lm = res.pose_landmarks.landmark
-            L = lm[mp_pose.PoseLandmark.LEFT_SHOULDER]
-            R = lm[mp_pose.PoseLandmark.RIGHT_SHOULDER]
-            nose = lm[mp_pose.PoseLandmark.NOSE]
-            ref_nose_z = nose.z
-            ref_shoulder_z = (L.z + R.z) / 2
-            shoulder_y = ref_shoulder_y = (L.y + R.y) / 2
-            ref_nose_shoulder_dist = abs(nose.y - shoulder_y)
-            calibrated = True
-            print("Calibrated! Current posture set as reference.")
-cap.release(); cv2.destroyAllWindows()
+
