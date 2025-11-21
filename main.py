@@ -2,6 +2,9 @@ import cv2, mediapipe as mp, math, time
 from PIL import Image
 import numpy as np
 import pygame
+import customtkinter as ctk
+from threading import Thread
+from tkinter import filedialog
 mp_pose = mp.solutions.pose
 mp_draw = mp.solutions.drawing_utils
 pose = mp_pose.Pose(min_detection_confidence=0.5, min_tracking_confidence=0.5)
@@ -16,11 +19,6 @@ ref_nose_shoulder_dist = None
 calibrated = False
 action = "GOOD DISTANCE"
 # GIF Setup
-import time
-import cv2
-import numpy as np
-from PIL import Image
-
 class GIFObject:
     def __init__(self, path, default_duration=100):
         self.gif = Image.open(path)
@@ -86,17 +84,156 @@ class GIFObject:
                 alpha_gif * gif_frame[:, :, c] + alpha_frame * target_frame[y1:y2, x1:x2, c]
             )
 
-
 intro_gif = GIFObject("./assets/cropped_ergonomics.gif")
 bad_gif = GIFObject("./assets/car.gif")
-good_gif = GIFObject("./assets/full-ergonomics.gif", 300)
+good_gif = GIFObject("./assets/dance.gif", 300)
 # Sound Setup
 pygame.mixer.init()
 sounds = {
     "bad": pygame.mixer.Sound("./assets/laugh.mp3"),
-
+    "good": pygame.mixer.Sound("./assets/placeholder.mp3")
 }
 prev_status = stable_status
+
+# Configuration Window Setup
+class SettingsWindow:
+    def __init__(self, title="Settings", width=600, height=400):
+        self.title = title
+        self.width = width
+        self.height = height
+
+        self.window_thread = None
+
+        # Store file paths
+        self.audio_files = [None, None]
+        self.image_files = [None, None, None]
+
+        # Store preview widgets
+        self.preview_labels = []
+
+        # Audio channel
+        self.channel = pygame.mixer.Channel(1)
+        self.app = None
+      
+    def spawn(self):
+        """Spawn the Tkinter window in a separate thread."""
+        if self.window_thread is None or not self.window_thread.is_alive():
+            self.window_thread = Thread(target=self._run_window)
+            self.window_thread.daemon = True
+            self.window_thread.start()
+
+    def _run_window(self):
+        # ---------- Only CTkToplevel ----------
+        window = ctk.CTkToplevel()
+        window.title(self.title)
+        window.geometry("600x400")
+        window.resizable(False, False)
+
+        ctk.CTkLabel(window, text="Settings", font=ctk.CTkFont(size=16, weight="bold")).pack(pady=5)
+
+        # ---------- Scrollable frame ----------
+        scrollable_frame = ctk.CTkScrollableFrame(window, width=580, height=320)
+        scrollable_frame.pack(padx=10, pady=5, fill="both", expand=True)
+
+        main_content_frame = ctk.CTkFrame(scrollable_frame)
+        main_content_frame.pack(pady=10, anchor="n")
+
+        # -------- AUDIO SECTION --------
+        audio_frame = ctk.CTkFrame(main_content_frame)
+        audio_frame.pack(side="left", padx=20, pady=10, anchor='n')
+        ctk.CTkLabel(audio_frame, text="Audio Files", font=ctk.CTkFont(size=13)).pack(pady=5)
+        audio_content_frame = ctk.CTkFrame(audio_frame)
+        audio_content_frame.pack()
+        for i in range(2):
+            ctk.CTkButton(audio_content_frame, text=f"Select Audio {i+1}", width=120,
+                        command=lambda x=i: self.select_audio(x)).grid(row=i, column=0, padx=5, pady=5)
+            ctk.CTkButton(audio_content_frame, text="Play", width=60,
+                        command=lambda x=i: self.play_audio(x)).grid(row=i, column=1, padx=3)
+            ctk.CTkButton(audio_content_frame, text="Stop", width=60,
+                        command=self.stop_audio).grid(row=i, column=2, padx=3)
+
+        # -------- IMAGE SECTION --------
+        image_frame = ctk.CTkFrame(main_content_frame)
+        image_frame.pack(side="left", padx=20, pady=10, anchor='n')
+        ctk.CTkLabel(image_frame, text="Images (GIF/PNG)", font=ctk.CTkFont(size=13)).pack(pady=5)
+        image_content_frame = ctk.CTkFrame(image_frame)
+        image_content_frame.pack()
+        for i in range(3):
+            ctk.CTkButton(image_content_frame, text=f"Select Image {i+1}", width=120,
+                        command=lambda x=i: self.select_image(x)).grid(row=i, column=0, padx=5, pady=5)
+            preview = ctk.CTkLabel(image_content_frame, text="[Preview]", fg_color="#ddd")
+            preview.grid(row=i, column=1, padx=10, pady=5)
+            self.preview_labels.append(preview)
+
+        # ---------- CLOSE BUTTON ----------
+        closing_frame = ctk.CTkFrame(scrollable_frame)
+        closing_frame.pack(anchor='n', pady=10)
+        ctk.CTkButton(closing_frame, text="Close", width=200, command=window.destroy).pack()
+        
+    # -------------------------------------------------------
+    #                   AUDIO FUNCTIONS
+    # -------------------------------------------------------
+
+    def select_audio(self, index):
+        path = filedialog.askopenfilename(
+            title="Select audio file",
+            filetypes=[("Audio Files", "*.mp3 *.wav")]
+        )
+        if path:
+            self.audio_files[index] = path
+            print(f"Loaded audio {index+1}: {path}")
+
+    def play_audio(self, index):
+        file = self.audio_files[index]
+        if file:
+            try:
+                sound = pygame.mixer.Sound(file)
+                self.channel.play(sound)
+            except Exception as e:
+                print("Error playing audio:", e)
+
+    def stop_audio(self):
+        self.channel.stop()
+
+    # -------------------------------------------------------
+    #                   IMAGE FUNCTIONS
+    # -------------------------------------------------------
+
+    def select_image(self, index):
+        path = filedialog.askopenfilename(
+            title="Select image",
+            filetypes=[("Image Files", "*.gif *.png")]
+        )
+        if path:
+            self.image_files[index] = path
+            self.show_preview(index, path)
+
+    def show_preview(self, index, filepath):
+        img = Image.open(filepath)
+        img.thumbnail((100, 100))  # scale to max 100x100 pixels
+        img_tk = ImageTk.PhotoImage(img)
+        self.preview_labels[index].configure(image=img_tk, text="")
+        self.preview_labels[index].image = img_tk
+
+
+def click_event(event, x, y, flags, param):
+    if event == cv2.EVENT_LBUTTONDOWN:
+        print("Clicked")
+        bx, by, bw, bh = param["button_rect"]
+        if bx <= x <= bx + bw and by <= y <= by + bh:
+            settings.spawn()
+            app.mainloop()
+app = ctk.CTk()
+app.withdraw()
+settings = SettingsWindow()
+
+BUTTON_W, BUTTON_H = 50, 50
+PADDING = 20
+
+params = {"button_rect": [0,0,0,0]}
+
+cv2.namedWindow("Posture Detection")
+cv2.setMouseCallback("Posture Detection",click_event, param=params)
 while True:
     ret, frame = cap.read()
     if not ret: break
@@ -159,6 +296,7 @@ while True:
             good_gif.overlay_next_frame(frame)
             if prev_status != "GOOD POSTURE":
                 pygame.mixer.stop()
+                sounds["good"].play(loops=-1)
         prev_status = status
         # Draw visual feedback
         base_y = 50
@@ -166,12 +304,17 @@ while True:
         cv2.line(frame, neck_px, nose_px, color, 2)  # neck line
         cv2.circle(frame, nose_px, 8, color, -1)  # nose point
         cv2.putText(frame, status, (20, base_y), cv2.FONT_HERSHEY_SIMPLEX, 1, color, 2)
-        
         cv2.putText(frame, f"Nose-Shoulder Dist: {nose_shoulder_dist:.3f}", (20,base_y + 40), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255,255,255), 1)
-        
+        # --- Compute lower-right button position ---
+        bx = w - BUTTON_W - PADDING
+        by = h - BUTTON_H - PADDING
+        button_rect = [bx, by, BUTTON_W, BUTTON_H]
+        params["button_rect"] = button_rect
+
+        # --- Draw button ---
+        cv2.rectangle(frame, (bx, by), (bx + BUTTON_W, by + BUTTON_H), (0, 200, 0), -1)
+        cv2.putText(frame, "Settings", (bx + 10, by + 35), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255,255,255), 2)
         if calibrated:
-            cv2.putText(frame, f"Nose Depth: {nose_depth_diff:.3f}", (20, base_y+50), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
-            cv2.putText(frame, f"Shoulder Depth: {shoulder_depth_diff:.3f}", (20, base_y+60), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
             cv2.putText(frame, "Press 'R' to recalibrate", (20,base_y + 80), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255,255,255), 1)
             cv2.putText(frame, action, (20, base_y + 100), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255), 1)
         
