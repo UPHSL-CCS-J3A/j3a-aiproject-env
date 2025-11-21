@@ -7,12 +7,13 @@ pose = mp_pose.Pose(min_detection_confidence=0.5, min_tracking_confidence=0.5)
 cap = cv2.VideoCapture(0)
 
 stable_status = "GOOD POSTURE"
+stable_action = "GOOD DISTANCE"
 statuschange_delay = 2
 statuschange_starttime = None
 # Calibration variables
 ref_nose_shoulder_dist = None
 calibrated = False
-
+action = "GOOD DISTANCE"
 # GIF Setup
 class GIFObject:
     def __init__(self, path):
@@ -76,7 +77,8 @@ while True:
         L = lm[mp_pose.PoseLandmark.LEFT_SHOULDER]
         R = lm[mp_pose.PoseLandmark.RIGHT_SHOULDER]
         nose = lm[mp_pose.PoseLandmark.NOSE]
-        
+        L_z = L.z
+        R_z = R.z
         # Convert to pixel coordinates
         L_px = (int(L.x*w), int(L.y*h))
         R_px = (int(R.x*w), int(R.y*h))
@@ -89,10 +91,14 @@ while True:
         
         # Determine posture status
         if calibrated:
-            dist_diff = abs(nose_shoulder_dist - ref_nose_shoulder_dist)
-            good_posture = dist_diff < 0.02  # threshold for good posture
+            # Adjusted Logic for Recommended Actions
+            scale_factor = shoulder_y / ref_shoulder_y
+            dist_diff = nose_shoulder_dist - ref_nose_shoulder_dist * scale_factor
+            shoulder_depth_diff = ((L.z + R.z)/2) - ref_shoulder_z
+            nose_depth_diff = nose.z - ref_nose_z
+            good_posture = abs(dist_diff) < 0.02 * scale_factor # threshold for good posture
             current_status = "GOOD POSTURE" if good_posture else "BAD POSTURE"
-
+            current_action = "MOVE FARTHER FROM CAMERA" if nose_depth_diff < -0.5 else "CHIN UP" if (dist_diff < 0.005 * scale_factor) else "CHIN DOWN" if (dist_diff > 0.05 * scale_factor) else "GOOD DISTANCE"
             if current_status != stable_status:
                 if statuschange_starttime is None:
                     statuschange_starttime = time.time()
@@ -102,19 +108,26 @@ while True:
             else:
                 statuschange_starttime = None
             status = stable_status
+            action = current_action
         else:
             status = "PRESS 'C' TO CALIBRATE"
         
         color = (0,255,0) if (calibrated and status == "GOOD POSTURE") else (0,0,255) if (calibrated and status == "BAD POSTURE") else (255,255,0)
         
         # Draw visual feedback
+        base_y = 50
         cv2.line(frame, L_px, R_px, color, 3)  # shoulder line
         cv2.line(frame, neck_px, nose_px, color, 2)  # neck line
         cv2.circle(frame, nose_px, 8, color, -1)  # nose point
-        cv2.putText(frame, status, (20,50), cv2.FONT_HERSHEY_SIMPLEX, 1, color, 2)
-        cv2.putText(frame, f"Nose-Shoulder Dist: {nose_shoulder_dist:.3f}", (20,90), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255,255,255), 1)
+        cv2.putText(frame, status, (20, base_y), cv2.FONT_HERSHEY_SIMPLEX, 1, color, 2)
+        cv2.putText(frame, f"Nose-Shoulder Dist: {nose_shoulder_dist:.3f}", (20,base_y + 40), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255,255,255), 1)
+        
         if calibrated:
-            cv2.putText(frame, "Press 'R' to recalibrate", (20,130), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255,255,255), 1)
+            cv2.putText(frame, f"Nose Depth: {nose_depth_diff:.3f}", (20, base_y+50), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
+            cv2.putText(frame, f"Shoulder Depth: {shoulder_depth_diff:.3f}", (20, base_y+60), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
+            cv2.putText(frame, "Press 'R' to recalibrate", (20,base_y + 80), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255,255,255), 1)
+            cv2.putText(frame, action, (20, base_y + 100), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255), 1)
+        
 
         if not calibrated:
             intro_gif.overlay_next_frame(frame, 0.65)
@@ -129,7 +142,9 @@ while True:
             L = lm[mp_pose.PoseLandmark.LEFT_SHOULDER]
             R = lm[mp_pose.PoseLandmark.RIGHT_SHOULDER]
             nose = lm[mp_pose.PoseLandmark.NOSE]
-            shoulder_y = (L.y + R.y) / 2
+            ref_nose_z = nose.z
+            ref_shoulder_z = (L.z + R.z) / 2
+            shoulder_y = ref_shoulder_y = (L.y + R.y) / 2
             ref_nose_shoulder_dist = abs(nose.y - shoulder_y)
             calibrated = True
             print("Calibrated! Current posture set as reference.")
