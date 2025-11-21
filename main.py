@@ -98,7 +98,7 @@ while True:
             nose_depth_diff = nose.z - ref_nose_z
             good_posture = abs(dist_diff) < 0.02 * scale_factor # threshold for good posture
             current_status = "GOOD POSTURE" if good_posture else "BAD POSTURE"
-            current_action = "MOVE FARTHER FROM CAMERA" if nose_depth_diff < -0.5 else "CHIN UP" if (dist_diff < 0.005 * scale_factor) else "CHIN DOWN" if (dist_diff > 0.05 * scale_factor) else "GOOD DISTANCE"
+            current_action = "MOVE FARTHER FROM CAMERA" if nose_depth_diff < -0.5 else "CHIN UP" if (dist_diff < 0.01 * scale_factor) else "CHIN DOWN" if (dist_diff > 0.03 * scale_factor) else "GOOD DISTANCE"
             if current_status != stable_status:
                 if statuschange_starttime is None:
                     statuschange_starttime = time.time()
