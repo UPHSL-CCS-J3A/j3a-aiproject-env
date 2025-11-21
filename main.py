@@ -1,6 +1,7 @@
 import cv2, mediapipe as mp, math, time
 from PIL import Image
 import numpy as np
+import pygame
 mp_pose = mp.solutions.pose
 mp_draw = mp.solutions.drawing_utils
 pose = mp_pose.Pose(min_detection_confidence=0.5, min_tracking_confidence=0.5)
@@ -15,8 +16,13 @@ ref_nose_shoulder_dist = None
 calibrated = False
 action = "GOOD DISTANCE"
 # GIF Setup
+import time
+import cv2
+import numpy as np
+from PIL import Image
+
 class GIFObject:
-    def __init__(self, path):
+    def __init__(self, path, default_duration=100):
         self.gif = Image.open(path)
         self.frames = []
         self.durations = []
@@ -24,43 +30,73 @@ class GIFObject:
             while True:
                 frame = cv2.cvtColor(np.array(self.gif.convert("RGBA")), cv2.COLOR_RGBA2BGRA)
                 self.frames.append(frame)
-                self.durations.append(self.gif.info.get('duration', 100))
+                # Use the GIF's duration if available, otherwise default
+                self.durations.append(self.gif.info.get('duration', default_duration))
                 self.gif.seek(self.gif.tell() + 1)
         except EOFError:
             pass
         self.index = 0
-    def overlay_next_frame(self, target_frame, size_multiplier=0.65, padding=10):
-            """
-            Overlay the next GIF frame onto the target frame with alpha blending.
+        self.last_update_time = time.time()  # timestamp of last frame update
+        self.accumulator = 0.0  # accumulated time in milliseconds
 
-            Args:
-                target_frame: The main OpenCV frame to overlay onto (BGR).
-                position: "upper-right", "upper-left", etc. (currently only upper-right implemented)
-                size_multiplier: Scale factor for GIF size.
-                padding: Padding from the window edge.
-            """
-            # Get next frame
-            gif_frame = self.frames[self.index]
+    def overlay_next_frame(self, target_frame, padding=10):
+        """
+        Overlay the next GIF frame onto the target frame with alpha blending,
+        using the GIF's own timing to control frame advancement.
+        """
+        # --- Handle delta time for GIF frame advancement ---
+        current_time = time.time()
+        delta_time = (current_time - self.last_update_time) * 1000  # ms
+        self.accumulator += delta_time
+        self.last_update_time = current_time
+
+        # Advance frame if accumulated time exceeds current frame's duration
+        while self.accumulator >= self.durations[self.index]:
+            self.accumulator -= self.durations[self.index]
             self.index = (self.index + 1) % len(self.frames)
 
-            # Resize frame
-            width = int(gif_frame.shape[1] * size_multiplier)
-            height = int(gif_frame.shape[0] * size_multiplier)
-            gif_frame = cv2.resize(gif_frame, (width, height))
+        gif_frame = self.frames[self.index]
 
-            # Determine overlay position
-            h_gif, w_gif = gif_frame.shape[:2]
-            y1, y2 = padding, padding + h_gif
-            x1, x2 = target_frame.shape[1] - w_gif - padding, target_frame.shape[1] - padding
+        # Determine maximum allowed size
+        max_w = min(200, target_frame.shape[1] - 2*padding)
+        max_h = min(200, target_frame.shape[0] - 2*padding)
 
-            # Alpha blending
-            alpha_gif = gif_frame[:, :, 3] / 255.0
-            alpha_frame = 1.0 - alpha_gif
-            for c in range(0, 3):
-                target_frame[y1:y2, x1:x2, c] = alpha_gif * gif_frame[:, :, c] + alpha_frame * target_frame[y1:y2, x1:x2, c]
+        # Compute scale factor
+        scale_w = max_w / gif_frame.shape[1]
+        scale_h = max_h / gif_frame.shape[0]
+        scale = min(scale_w, scale_h, 1.0)
+
+        # Resize GIF
+        new_w = max(1, int(gif_frame.shape[1] * scale))
+        new_h = max(1, int(gif_frame.shape[0] * scale))
+        gif_frame = cv2.resize(gif_frame, (new_w, new_h))
+
+
+        
+        # --- Determine overlay position (upper-right) ---
+        h_gif, w_gif = gif_frame.shape[:2]
+        y1, y2 = padding, padding + h_gif
+        x1, x2 = target_frame.shape[1] - w_gif - padding, target_frame.shape[1] - padding
+
+        # --- Alpha blending ---
+        alpha_gif = gif_frame[:, :, 3] / 255.0
+        alpha_frame = 1.0 - alpha_gif
+        for c in range(3):  # BGR channels only
+            target_frame[y1:y2, x1:x2, c] = (
+                alpha_gif * gif_frame[:, :, c] + alpha_frame * target_frame[y1:y2, x1:x2, c]
+            )
+
 
 intro_gif = GIFObject("./assets/cropped_ergonomics.gif")
+bad_gif = GIFObject("./assets/car.gif")
+good_gif = GIFObject("./assets/dance.gif", 300)
+# Sound Setup
+pygame.mixer.init()
+sounds = {
+    "bad": pygame.mixer.Sound("./assets/laugh.mp3"),
 
+}
+prev_status = stable_status
 while True:
     ret, frame = cap.read()
     if not ret: break
@@ -113,13 +149,24 @@ while True:
             status = "PRESS 'C' TO CALIBRATE"
         
         color = (0,255,0) if (calibrated and status == "GOOD POSTURE") else (0,0,255) if (calibrated and status == "BAD POSTURE") else (255,255,0)
-        
+        if status == "BAD POSTURE":
+            bad_gif.overlay_next_frame(frame)
+            if prev_status != "BAD POSTURE":
+                print("Plays Music")
+                pygame.mixer.stop()
+                sounds["bad"].play(loops=-1)
+        elif status == "GOOD POSTURE":
+            good_gif.overlay_next_frame(frame)
+            if prev_status != "GOOD POSTURE":
+                pygame.mixer.stop()
+        prev_status = status
         # Draw visual feedback
         base_y = 50
         cv2.line(frame, L_px, R_px, color, 3)  # shoulder line
         cv2.line(frame, neck_px, nose_px, color, 2)  # neck line
         cv2.circle(frame, nose_px, 8, color, -1)  # nose point
         cv2.putText(frame, status, (20, base_y), cv2.FONT_HERSHEY_SIMPLEX, 1, color, 2)
+        
         cv2.putText(frame, f"Nose-Shoulder Dist: {nose_shoulder_dist:.3f}", (20,base_y + 40), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255,255,255), 1)
         
         if calibrated:
