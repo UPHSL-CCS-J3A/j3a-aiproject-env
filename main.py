@@ -335,12 +335,14 @@ class SettingsWindow:
         import_frames = ctk.CTkFrame(left_side_frame)
         import_frames.pack(anchor='n', pady=10, fill = 'x')
         ctk.CTkLabel(import_frames, text="Import Files", font=ctk.CTkFont(size=13), bg_color= "#cfcfcf").pack(fill='x', pady=5)
-        ctk.CTkLabel(import_frames, text= f"Calibration File: ").pack()
+        self.calibration_lbl = ctk.CTkLabel(import_frames, text= f"Calibration File: ")
+        self.calibration_lbl.pack()
         calibration_frame = ctk.CTkFrame(import_frames, fg_color="#dbdbdb")
         calibration_frame.pack()
         ctk.CTkButton(calibration_frame, text="Import", width=100, command= self.load_calibration ).pack(side= 'left', pady=5, padx = 10)
         ctk.CTkButton(calibration_frame, text="Save", width=100, command= self.save_calibration ).pack(side= 'left', pady=5, padx = 10)
-        ctk.CTkLabel(import_frames, text= f"Settings File: ").pack()
+        self.settings_lbl = ctk.CTkLabel(import_frames, text= f"Settings File: ")
+        self.settings_lbl.pack()
         setting_frame = ctk.CTkFrame(import_frames, fg_color="#dbdbdb")
         setting_frame.pack()
         ctk.CTkButton(setting_frame, text="Import", width=100, command= self.load_settings).pack(side= 'left', pady=5, padx = 10)
@@ -474,17 +476,21 @@ class SettingsWindow:
             filetypes=[("JSON Files", "*.json")],
             title="Save Calibration"
         )
-        if path:
+        original_path = path
+        if original_path:
             with open(path, "w") as f:
                 json.dump(self.calibration_data, f, indent=4)
             print(f"Calibration saved to {path}")
+            self.calibration_lbl.configure(text= f"Calibration File: {os.path.basename(original_path)}")
+
     
     def load_calibration(self):
         path = filedialog.askopenfilename(
             filetypes=[("JSON Files", "*.json")],
             title="Load Calibration"
         )
-        if path:
+        original_path = path
+        if original_path:
             with open(path, "r") as f:
                 self.calibration_data = json.load(f)
             
@@ -496,6 +502,7 @@ class SettingsWindow:
             ref_nose_shoulder_dist = self.calibration_data["ref_nose_shoulder_dist"]
             calibrated = True
             print(f"Calibration loaded from {path}")
+            self.calibration_lbl.configure(text= f"Calibration File: {os.path.basename(original_path)}")
 
     def save_settings(self):
         settings_data = {
@@ -508,18 +515,20 @@ class SettingsWindow:
             filetypes=[("JSON Files", "*.json")],
             title="Save Settings"
         )
-        if path:
+        original_path = path
+        if original_path:
             with open(path, "w") as f:
                 json.dump(settings_data, f, indent=4)
             print(f"Settings saved to {path}")
-
+            self.settings_lbl.configure(text= f"Settings File: {os.path.basename(original_path)}")
     def load_settings(self):
         global sounds
         path = filedialog.askopenfilename(
             filetypes=[("JSON Files", "*.json")],
             title="Load Settings"
         )
-        if path:
+        original_path = path
+        if original_path:
             with open(path, "r") as f:
                 loaded = json.load(f)
 
@@ -550,6 +559,7 @@ class SettingsWindow:
                     global good_gif
                     good_gif = GIFObject(path)
             print(f"Settings loaded from {path}")
+            self.settings_lbl.configure(text= f"Settings File: {os.path.basename(original_path)}")
 
 
 
