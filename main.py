@@ -98,16 +98,19 @@ def run_posture_detection():
             cv2.circle(frame, nose_px, 8, color, -1)  # nose point
             cv2.putText(frame, status, (20, base_y), cv2.FONT_HERSHEY_SIMPLEX, 1, color, 2)
             cv2.putText(frame, f"Nose-Shoulder Dist: {nose_shoulder_dist:.3f}", (20,base_y + 40), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255,255,255), 1)
+            
             # --- Compute lower-right button position ---
-            bx = w - BUTTON_W - PADDING
-            by = h - BUTTON_H - PADDING
+            bx = w - BUTTON_W - PADDING + 8
+            by = h - BUTTON_H - PADDING + 8
             button_rect = [bx, by, BUTTON_W, BUTTON_H]
             params["button_rect"] = button_rect
 
             # --- Draw button ---
             cv2.rectangle(frame, (bx, by), (bx + BUTTON_W, by + BUTTON_H), (0, 200, 0), -1)
-            cv2.putText(frame, "Settings", (bx + 10, by + 35), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255,255,255), 2)
+            # cv2.putText(frame, "Settings", (bx + 10, by + 35), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255,255,255), 2)
+            wrench_png.overlay_next_frame(frame, position = 'lower-right', size=(50,50))
             if calibrated:
+                cv2.putText(frame, f"Reference Nose-Shoulder Dist: {ref_nose_shoulder_dist:.3f}", (20,base_y + 60), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (0,255,0), 1)
                 cv2.putText(frame, "Press 'R' to recalibrate", (20,base_y + 80), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255,255,255), 1)
                 cv2.putText(frame, action, (20, base_y + 100), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255), 1)
             
@@ -162,7 +165,7 @@ class GIFObject:
         self.last_update_time = time.time()  # timestamp of last frame update
         self.accumulator = 0.0  # accumulated time in milliseconds
 
-    def overlay_next_frame(self, target_frame, padding=10):
+    def overlay_next_frame(self, target_frame, padding=10, position = "upper-right", size = None):
         """
         Overlay the next GIF frame onto the target frame with alpha blending,
         using the GIF's own timing to control frame advancement.
@@ -194,12 +197,21 @@ class GIFObject:
         new_h = max(1, int(gif_frame.shape[0] * scale))
         gif_frame = cv2.resize(gif_frame, (new_w, new_h))
 
+        if size is not None:
+            gif_frame = cv2.resize(gif_frame, size)
 
         
         # --- Determine overlay position (upper-right) ---
-        h_gif, w_gif = gif_frame.shape[:2]
-        y1, y2 = int(padding), int(padding + h_gif)
-        x1, x2 = int(target_frame.shape[1] - w_gif - padding), int(target_frame.shape[1] - padding)
+        if position == "upper-right":
+            h_gif, w_gif = gif_frame.shape[:2]
+            y1, y2 = int(padding), int(padding + h_gif)
+            x1, x2 = int(target_frame.shape[1] - w_gif - padding), int(target_frame.shape[1] - padding)
+        elif position == "lower-right":
+            h_gif, w_gif = gif_frame.shape[:2]
+            y1 = int(target_frame.shape[0] - h_gif - padding)  # start at bottom
+            y2 = int(target_frame.shape[0] - padding)
+            x1 = int(target_frame.shape[1] - w_gif - padding)  # same as upper-right
+            x2 = int(target_frame.shape[1] - padding)
 
         # --- Alpha blending ---
         alpha_gif = gif_frame[:, :, 3] / 255.0
@@ -212,6 +224,7 @@ class GIFObject:
 intro_gif = GIFObject("./assets/cropped_ergonomics.gif")
 bad_gif = GIFObject("./assets/car.gif")
 good_gif = GIFObject("./assets/dance.gif", 300)
+wrench_png = GIFObject("./assets/wrench.png")
 # Sound Setup
 pygame.mixer.init()
 sounds = {
