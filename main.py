@@ -19,7 +19,7 @@ statuschange_starttime = None
 
 # Thread Function for CV
 def run_posture_detection():
-    global calibrated, prev_status, stable_status, statuschange_starttime
+    global calibrated, prev_status, stable_status, statuschange_starttime, settings, ref_nose_z, ref_shoulder_z, ref_shoulder_y, ref_nose_shoulder_dist
     BUTTON_W, BUTTON_H = 50, 50
     PADDING = 20
 
@@ -136,6 +136,7 @@ def run_posture_detection():
                     "ref_nose_shoulder_dist": abs(nose.y - (L.y + R.y)/2)
                 }
                 calibrated = True
+                settings.calibration_data = ref_values
                 print("Calibrated! Current posture set as reference.")
     cap.release(); cv2.destroyAllWindows()
 # Calibration variables
@@ -248,8 +249,8 @@ class SettingsWindow:
         # Audio channel
         self.channel = pygame.mixer.Channel(1)
         self.app = None
-        self.calibration_file = None
-        self.settings_file = None
+        self.calibration_data = None
+        self.settings_data = None
       
     def spawn(self):
         """Spawn the Tkinter window in a separate thread."""
@@ -337,13 +338,13 @@ class SettingsWindow:
         ctk.CTkLabel(import_frames, text= f"Calibration File: ").pack()
         calibration_frame = ctk.CTkFrame(import_frames, fg_color="#dbdbdb")
         calibration_frame.pack()
-        ctk.CTkButton(calibration_frame, text="Import", width=100).pack(side= 'left', pady=5, padx = 10)
-        ctk.CTkButton(calibration_frame, text="Save", width=100).pack(side= 'left', pady=5, padx = 10)
+        ctk.CTkButton(calibration_frame, text="Import", width=100, command= self.load_calibration ).pack(side= 'left', pady=5, padx = 10)
+        ctk.CTkButton(calibration_frame, text="Save", width=100, command= self.save_calibration ).pack(side= 'left', pady=5, padx = 10)
         ctk.CTkLabel(import_frames, text= f"Settings File: ").pack()
         setting_frame = ctk.CTkFrame(import_frames, fg_color="#dbdbdb")
         setting_frame.pack()
-        ctk.CTkButton(setting_frame, text="Import", width=100).pack(side= 'left', pady=5, padx = 10)
-        ctk.CTkButton(setting_frame, text="Save", width=100).pack(side= 'left', pady=5, padx = 10)
+        ctk.CTkButton(setting_frame, text="Import", width=100, command= self.load_settings).pack(side= 'left', pady=5, padx = 10)
+        ctk.CTkButton(setting_frame, text="Save", width=100, command= self.save_settings).pack(side= 'left', pady=5, padx = 10)
         # -------- IMAGE SECTION --------
         image_frame = ctk.CTkFrame(main_content_frame)
         image_frame.pack(side="left", padx=20, pady=10, anchor='n')
@@ -438,7 +439,7 @@ class SettingsWindow:
             title="Select image",
             filetypes=[("Image Files", "*.gif *.png")]
         )
-        posture_lbl = ["Intro Img", "Good Posture Img", "Bad Posture Img"]
+        posture_lbl = ["Intro Img", "Bad Posture Img", "Good Posture Img"]
         if path:
             self.image_files[index] = path
             self.show_preview(index, path)
@@ -462,6 +463,94 @@ class SettingsWindow:
         preview_img = ctk.CTkImage(light_image=img, dark_image=img, size=(100, 100))
         self.preview_labels[index].configure(image=preview_img, text="")
         self.preview_labels[index].image = preview_img
+    
+    def save_calibration(self):
+        if not self.calibration_data:
+            print("No calibration data to save!")
+            return
+
+        path = filedialog.asksaveasfilename(
+            defaultextension=".json",
+            filetypes=[("JSON Files", "*.json")],
+            title="Save Calibration"
+        )
+        if path:
+            with open(path, "w") as f:
+                json.dump(self.calibration_data, f, indent=4)
+            print(f"Calibration saved to {path}")
+    
+    def load_calibration(self):
+        path = filedialog.askopenfilename(
+            filetypes=[("JSON Files", "*.json")],
+            title="Load Calibration"
+        )
+        if path:
+            with open(path, "r") as f:
+                self.calibration_data = json.load(f)
+            
+            # Apply calibration
+            global ref_nose_z, ref_shoulder_z, ref_shoulder_y, ref_nose_shoulder_dist, calibrated
+            ref_nose_z = self.calibration_data["ref_nose_z"]
+            ref_shoulder_z = self.calibration_data["ref_shoulder_z"]
+            ref_shoulder_y = self.calibration_data["ref_shoulder_y"]
+            ref_nose_shoulder_dist = self.calibration_data["ref_nose_shoulder_dist"]
+            calibrated = True
+            print(f"Calibration loaded from {path}")
+
+    def save_settings(self):
+        settings_data = {
+            "images": self.image_files,
+            "audio": self.audio_files
+        }
+
+        path = filedialog.asksaveasfilename(
+            defaultextension=".json",
+            filetypes=[("JSON Files", "*.json")],
+            title="Save Settings"
+        )
+        if path:
+            with open(path, "w") as f:
+                json.dump(settings_data, f, indent=4)
+            print(f"Settings saved to {path}")
+
+    def load_settings(self):
+        global sounds
+        path = filedialog.askopenfilename(
+            filetypes=[("JSON Files", "*.json")],
+            title="Load Settings"
+        )
+        if path:
+            with open(path, "r") as f:
+                loaded = json.load(f)
+
+            # Load audio files
+            self.audio_files = loaded.get("audio", self.audio_files)
+            posture_lbl = ["Bad Posture Audio", "Good Posture Audio"]
+            for i, path in enumerate(self.audio_files):
+                base_filename = os.path.basename(path)
+                self.audio_labels[i].configure(text=f"{posture_lbl[i]} Loaded: {base_filename}")
+                if i == 0:
+                    sounds["bad"] = pygame.mixer.Sound(path)
+                elif i == 1:
+                    sounds["good"] = pygame.mixer.Sound(path)
+            # Load image files and update previews
+            self.image_files = loaded.get("images", self.image_files)
+            posture_lbl_img = ["Intro Img", "Bad Posture Img", "Good Posture Img"]
+            for i, path in enumerate(self.image_files):
+                self.show_preview(i, path)
+                filename = os.path.basename(path)
+                self.filename_labels[i].configure(text=f"{posture_lbl_img[i]} : {filename}")
+                if i == 0:
+                    global intro_gif
+                    intro_gif = GIFObject(path)
+                elif i == 1:
+                    global bad_gif
+                    bad_gif = GIFObject(path)
+                elif i == 2:
+                    global good_gif
+                    good_gif = GIFObject(path)
+            print(f"Settings loaded from {path}")
+
 
 
 

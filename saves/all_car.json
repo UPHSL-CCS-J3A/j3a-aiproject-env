@@ -1,0 +1,11 @@
+{
+    "images": [
+        "C:/Users/funel/Desktop/Python Development/Artificial Intelligence (Subject) Activities/j3a-aiproject-env/assets/car.gif",
+        "./assets/car.gif",
+        "C:/Users/funel/Desktop/Python Development/Artificial Intelligence (Subject) Activities/j3a-aiproject-env/assets/car.gif"
+    ],
+    "audio": [
+        "./assets/laugh.mp3",
+        "C:/Users/funel/Desktop/Python Development/Artificial Intelligence (Subject) Activities/j3a-aiproject-env/assets/laugh.mp3"
+    ]
+}
