@@ -6,6 +6,7 @@ import customtkinter as ctk
 from threading import Thread
 from tkinter import filedialog
 import os
+import json
 mp_pose = mp.solutions.pose
 mp_draw = mp.solutions.drawing_utils
 pose = mp_pose.Pose(min_detection_confidence=0.5, min_tracking_confidence=0.5)
@@ -128,6 +129,12 @@ def run_posture_detection():
                 ref_shoulder_z = (L.z + R.z) / 2
                 shoulder_y = ref_shoulder_y = (L.y + R.y) / 2
                 ref_nose_shoulder_dist = abs(nose.y - shoulder_y)
+                ref_values ={
+                    "ref_nose_z": nose.z,
+                    "ref_shoulder_z": (L.z + R.z) / 2,
+                    "ref_shoulder_y": (L.y + R.y) / 2,
+                    "ref_nose_shoulder_dist": abs(nose.y - (L.y + R.y)/2)
+                }
                 calibrated = True
                 print("Calibrated! Current posture set as reference.")
     cap.release(); cv2.destroyAllWindows()
@@ -241,6 +248,8 @@ class SettingsWindow:
         # Audio channel
         self.channel = pygame.mixer.Channel(1)
         self.app = None
+        self.calibration_file = None
+        self.settings_file = None
       
     def spawn(self):
         """Spawn the Tkinter window in a separate thread."""
@@ -262,16 +271,18 @@ class SettingsWindow:
         scrollable_frame = ctk.CTkScrollableFrame(window, width=580, height=320)
         scrollable_frame.pack(padx=10, pady=5, fill="both", expand=True)
 
-        main_content_frame = ctk.CTkFrame(scrollable_frame)
+        main_content_frame = ctk.CTkFrame(scrollable_frame, bg_color= 'gray')
         main_content_frame.pack(pady=10, anchor="n")
 
+        left_side_frame = ctk.CTkFrame(main_content_frame)
+        left_side_frame.pack(side="left", padx=20, pady=10, anchor='n')
         # -------- AUDIO SECTION --------
-        audio_frame = ctk.CTkFrame(main_content_frame)
-        audio_frame.pack(side="left", padx=20, pady=10, anchor='n')
+        audio_frame = ctk.CTkFrame(left_side_frame)
+        audio_frame.pack(anchor='n')
 
-        ctk.CTkLabel(audio_frame, text="Audio Files", font=ctk.CTkFont(size=13)).pack(pady=5)
+        ctk.CTkLabel(audio_frame, text="Audio Files", font=ctk.CTkFont(size=13),bg_color= "#cfcfcf").pack(fill='x', pady=5)
 
-        audio_content_frame = ctk.CTkFrame(audio_frame)
+        audio_content_frame = ctk.CTkFrame(audio_frame, fg_color= "#dbdbdb")
         audio_content_frame.pack()
 
         self.audio_labels = []  # store label widgets
@@ -287,20 +298,23 @@ class SettingsWindow:
                 text=f"Select {posture_lbl}",
                 width=200,
                 command=lambda x=i: self.select_audio(x),
+                bg_color= '#dbdbdb'
             ).grid(row=i*2, column=0, padx=5, pady=(5, 0))
 
             ctk.CTkButton(
                 audio_content_frame,
                 text="Play",
                 width=60,
-                command=lambda x=i: self.play_audio(x)
+                command=lambda x=i: self.play_audio(x),
+                bg_color= '#dbdbdb'
             ).grid(row=i*2, column=1, padx=3)
 
             ctk.CTkButton(
                 audio_content_frame,
                 text="Stop",
                 width=60,
-                command=self.stop_audio
+                command=self.stop_audio,
+                bg_color= '#dbdbdb'
             ).grid(row=i*2, column=2, padx=3)
 
             # --- Bottom row: filename preview (small, does not stretch UI) ---
@@ -316,7 +330,20 @@ class SettingsWindow:
 
             self.audio_labels.append(label)
 
-
+        # -------- SAVE CONFIG SECTION
+        import_frames = ctk.CTkFrame(left_side_frame)
+        import_frames.pack(anchor='n', pady=10, fill = 'x')
+        ctk.CTkLabel(import_frames, text="Import Files", font=ctk.CTkFont(size=13), bg_color= "#cfcfcf").pack(fill='x', pady=5)
+        ctk.CTkLabel(import_frames, text= f"Calibration File: ").pack()
+        calibration_frame = ctk.CTkFrame(import_frames, fg_color="#dbdbdb")
+        calibration_frame.pack()
+        ctk.CTkButton(calibration_frame, text="Import", width=100).pack(side= 'left', pady=5, padx = 10)
+        ctk.CTkButton(calibration_frame, text="Save", width=100).pack(side= 'left', pady=5, padx = 10)
+        ctk.CTkLabel(import_frames, text= f"Settings File: ").pack()
+        setting_frame = ctk.CTkFrame(import_frames, fg_color="#dbdbdb")
+        setting_frame.pack()
+        ctk.CTkButton(setting_frame, text="Import", width=100).pack(side= 'left', pady=5, padx = 10)
+        ctk.CTkButton(setting_frame, text="Save", width=100).pack(side= 'left', pady=5, padx = 10)
         # -------- IMAGE SECTION --------
         image_frame = ctk.CTkFrame(main_content_frame)
         image_frame.pack(side="left", padx=20, pady=10, anchor='n')
@@ -425,6 +452,7 @@ class SettingsWindow:
                 global bad_gif
                 bad_gif = GIFObject(path)
             elif index == 2:
+                global good_gif
                 good_gif = GIFObject(path)
 
     def show_preview(self, index, filepath):
