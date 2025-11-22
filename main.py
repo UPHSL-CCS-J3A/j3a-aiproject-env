@@ -5,6 +5,7 @@ import pygame
 import customtkinter as ctk
 from threading import Thread
 from tkinter import filedialog
+import os
 mp_pose = mp.solutions.pose
 mp_draw = mp.solutions.drawing_utils
 pose = mp_pose.Pose(min_detection_confidence=0.5, min_tracking_confidence=0.5)
@@ -14,6 +15,8 @@ stable_status = "GOOD POSTURE"
 stable_action = "GOOD DISTANCE"
 statuschange_delay = 2
 statuschange_starttime = None
+
+# Thread Function for CV
 def run_posture_detection():
     global calibrated, prev_status, stable_status, statuschange_starttime
     BUTTON_W, BUTTON_H = 50, 50
@@ -219,12 +222,22 @@ class SettingsWindow:
         self.window_thread = None
 
         # Store file paths
-        self.audio_files = [None, None]
-        self.image_files = [None, None, None]
+        # DEFAULT FILES
+        self.image_files = [
+            "./assets/cropped_ergonomics.gif",   # intro
+            "./assets/car.gif",                  # bad posture
+            "./assets/dance.gif"                 # good posture
+        ]
+
+        self.audio_files = [
+            "./assets/laugh.mp3",       # bad sound
+            "./assets/placeholder.mp3"  # good sound
+        ]
 
         # Store preview widgets
         self.preview_labels = []
 
+        self.audio_labels = []  # Will store CTkLabels showing filenames
         # Audio channel
         self.channel = pygame.mixer.Channel(1)
         self.app = None
@@ -240,7 +253,7 @@ class SettingsWindow:
         # ---------- Only CTkToplevel ----------
         window = ctk.CTkToplevel()
         window.title(self.title)
-        window.geometry("600x400")
+        window.geometry("800x400")
         window.resizable(False, False)
 
         ctk.CTkLabel(window, text="Settings", font=ctk.CTkFont(size=16, weight="bold")).pack(pady=5)
@@ -255,29 +268,96 @@ class SettingsWindow:
         # -------- AUDIO SECTION --------
         audio_frame = ctk.CTkFrame(main_content_frame)
         audio_frame.pack(side="left", padx=20, pady=10, anchor='n')
+
         ctk.CTkLabel(audio_frame, text="Audio Files", font=ctk.CTkFont(size=13)).pack(pady=5)
+
         audio_content_frame = ctk.CTkFrame(audio_frame)
         audio_content_frame.pack()
+
+        self.audio_labels = []  # store label widgets
+
         for i in range(2):
-            ctk.CTkButton(audio_content_frame, text=f"Select Audio {i+1}", width=120,
-                        command=lambda x=i: self.select_audio(x)).grid(row=i, column=0, padx=5, pady=5)
-            ctk.CTkButton(audio_content_frame, text="Play", width=60,
-                        command=lambda x=i: self.play_audio(x)).grid(row=i, column=1, padx=3)
-            ctk.CTkButton(audio_content_frame, text="Stop", width=60,
-                        command=self.stop_audio).grid(row=i, column=2, padx=3)
+            if i == 0:
+                posture_lbl = "Bad Posture Audio"
+            elif i == 1:
+                posture_lbl = "Good Posture Audio"
+            # --- Top row: buttons ---
+            ctk.CTkButton(
+                audio_content_frame,
+                text=f"Select {posture_lbl}",
+                width=200,
+                command=lambda x=i: self.select_audio(x),
+            ).grid(row=i*2, column=0, padx=5, pady=(5, 0))
+
+            ctk.CTkButton(
+                audio_content_frame,
+                text="Play",
+                width=60,
+                command=lambda x=i: self.play_audio(x)
+            ).grid(row=i*2, column=1, padx=3)
+
+            ctk.CTkButton(
+                audio_content_frame,
+                text="Stop",
+                width=60,
+                command=self.stop_audio
+            ).grid(row=i*2, column=2, padx=3)
+
+            # --- Bottom row: filename preview (small, does not stretch UI) ---
+            
+            base_filename = os.path.basename(self.audio_files[i])
+            label = ctk.CTkLabel(
+                audio_content_frame,
+                text=f"{posture_lbl} Loaded: {base_filename}",
+                font=ctk.CTkFont(size=11),
+                anchor="w"
+            )
+            label.grid(row=i*2 + 1, column=0, columnspan=3, sticky="w", padx=5, pady=(0, 5))
+
+            self.audio_labels.append(label)
+
 
         # -------- IMAGE SECTION --------
         image_frame = ctk.CTkFrame(main_content_frame)
         image_frame.pack(side="left", padx=20, pady=10, anchor='n')
+
         ctk.CTkLabel(image_frame, text="Images (GIF/PNG)", font=ctk.CTkFont(size=13)).pack(pady=5)
+
         image_content_frame = ctk.CTkFrame(image_frame)
         image_content_frame.pack()
+
+        self.preview_labels = []      # for the image preview widgets
+        self.filename_labels = []     # for the filename labels
+
         for i in range(3):
-            ctk.CTkButton(image_content_frame, text=f"Select Image {i+1}", width=120,
-                        command=lambda x=i: self.select_image(x)).grid(row=i, column=0, padx=5, pady=5)
-            preview = ctk.CTkLabel(image_content_frame, text="[Preview]", fg_color="#ddd")
-            preview.grid(row=i, column=1, padx=10, pady=5)
+            posture_lbl = ["Intro Img", "Bad Posture Img", "Good Posture Img"]
+            # --- Select Button ---
+            ctk.CTkButton(
+                image_content_frame,
+                text=f"Select Image {i+1}",
+                width=120,
+                command=lambda x=i: self.select_image(x)
+            ).grid(row=i*2, column=0, padx=5, pady=(5, 0))
+
+            # --- Preview ---
+            preview = ctk.CTkLabel(image_content_frame, text="[Preview]", fg_color="#ddd", width=120, height=80)
+            preview.grid(row=i*2, column=1, padx=10, pady=(5, 0))
             self.preview_labels.append(preview)
+
+            # --- Filename Label below the preview ---
+            fname_label = ctk.CTkLabel(image_content_frame, text=f"{posture_lbl[i]}", font=ctk.CTkFont(size=10), anchor="w")
+            fname_label.grid(row=i*2+1, column=0, columnspan=2, sticky="w", padx=5, pady=(0, 5))
+            self.filename_labels.append(fname_label)
+
+        # --- Load default previews and update filename labels ---
+        for i, path in enumerate(self.image_files):
+            try:
+                self.show_preview(i, path)
+                filename = os.path.basename(path)
+                self.filename_labels[i].configure(text=f"{posture_lbl[i]} : {filename}")
+            except:
+                pass
+
 
         # ---------- CLOSE BUTTON ----------
         closing_frame = ctk.CTkFrame(scrollable_frame)
@@ -289,13 +369,26 @@ class SettingsWindow:
     # -------------------------------------------------------
 
     def select_audio(self, index):
+        global sounds
         path = filedialog.askopenfilename(
             title="Select audio file",
             filetypes=[("Audio Files", "*.mp3 *.wav")]
         )
+        posture_lbl = ["Bad Posture Audio", "Good Posture Audio"]
         if path:
+            # Store the full path for playback
             self.audio_files[index] = path
+
+            # Update the filename label to show only the base name
+            base_filename = os.path.basename(path)
+            self.audio_labels[index].configure(text=f"{posture_lbl[index]} Loaded: {base_filename}")
+
             print(f"Loaded audio {index+1}: {path}")
+            if index == 0:
+                sounds["bad"] = pygame.mixer.Sound(path)
+            elif index == 1:
+                sounds["good"] = pygame.mixer.Sound(path)
+
 
     def play_audio(self, index):
         file = self.audio_files[index]
@@ -318,9 +411,21 @@ class SettingsWindow:
             title="Select image",
             filetypes=[("Image Files", "*.gif *.png")]
         )
+        posture_lbl = ["Intro Img", "Good Posture Img", "Bad Posture Img"]
         if path:
             self.image_files[index] = path
             self.show_preview(index, path)
+             # Update the filename label
+            filename = os.path.basename(path)
+            self.filename_labels[index].configure(text=f"{posture_lbl[index]} : {filename}")
+            if index == 0:
+                global intro_gif
+                intro_gif = GIFObject(path)
+            elif index == 1:
+                global bad_gif
+                bad_gif = GIFObject(path)
+            elif index == 2:
+                good_gif = GIFObject(path)
 
     def show_preview(self, index, filepath):
         img = Image.open(filepath)
@@ -343,6 +448,17 @@ app.withdraw()
 settings = SettingsWindow()
 cv_thread = Thread(target=run_posture_detection, daemon=True)
 cv_thread.start()
+
+def check_thread():
+    if cv_thread.is_alive():
+        # Keep checking every 100 ms
+        app.after(100, check_thread)
+    else:
+        print("CV thread finished, closing app.")
+        app.destroy()  # safely terminate mainloop
+
+# Start checking
+app.after(100, check_thread)
 app.mainloop()
 
 
