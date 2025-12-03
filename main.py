@@ -7,6 +7,7 @@ from threading import Thread
 from tkinter import filedialog
 import os
 import json
+from GIFObject import GIFObject
 mp_pose = mp.solutions.pose
 mp_draw = mp.solutions.drawing_utils
 pose = mp_pose.Pose(min_detection_confidence=0.5, min_tracking_confidence=0.5)
@@ -80,13 +81,13 @@ def run_posture_detection():
             
             color = (0,255,0) if (calibrated and status == "GOOD POSTURE") else (0,0,255) if (calibrated and status == "BAD POSTURE") else (255,255,0)
             if status == "BAD POSTURE":
-                bad_gif.overlay_next_frame(frame)
+                gif_holder["bad"].overlay_next_frame(frame)
                 if prev_status != "BAD POSTURE":
                     print("Plays Music")
                     pygame.mixer.stop()
                     sounds["bad"].play(loops=-1)
             elif status == "GOOD POSTURE":
-                good_gif.overlay_next_frame(frame)
+                gif_holder["good"].overlay_next_frame(frame)
                 if prev_status != "GOOD POSTURE":
                     pygame.mixer.stop()
                     sounds["good"].play(loops=-1)
@@ -107,7 +108,7 @@ def run_posture_detection():
 
             # --- Draw button ---
             cv2.rectangle(frame, (bx, by), (bx + BUTTON_W, by + BUTTON_H), (0, 200, 0), -1)
-            # cv2.putText(frame, "Settings", (bx + 10, by + 35), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255,255,255), 2)
+            wrench_png = GIFObject("./assets/wrench.png")
             wrench_png.overlay_next_frame(frame, position = 'lower-right', size=(50,50))
             if calibrated:
                 cv2.putText(frame, f"Reference Nose-Shoulder Dist: {ref_nose_shoulder_dist:.3f}", (20,base_y + 60), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (0,255,0), 1)
@@ -116,7 +117,7 @@ def run_posture_detection():
             
 
             if not calibrated:
-                intro_gif.overlay_next_frame(frame, 0.65)
+                gif_holder["intro"].overlay_next_frame(frame, 0.65)
 
 
         cv2.imshow('Posture Detection', frame)
@@ -147,84 +148,17 @@ ref_nose_shoulder_dist = None
 calibrated = False
 action = "GOOD DISTANCE"
 # GIF Setup
-class GIFObject:
-    def __init__(self, path, default_duration=100):
-        self.gif = Image.open(path)
-        self.frames = []
-        self.durations = []
-        try:
-            while True:
-                frame = cv2.cvtColor(np.array(self.gif.convert("RGBA")), cv2.COLOR_RGBA2BGRA)
-                self.frames.append(frame)
-                # Use the GIF's duration if available, otherwise default
-                self.durations.append(self.gif.info.get('duration', default_duration))
-                self.gif.seek(self.gif.tell() + 1)
-        except EOFError:
-            pass
-        self.index = 0
-        self.last_update_time = time.time()  # timestamp of last frame update
-        self.accumulator = 0.0  # accumulated time in milliseconds
+gif_holder = {
+    "intro": GIFObject("./assets/cropped_ergonomics.gif"),
+    "bad": GIFObject("./assets/car.gif"),
+    "good": GIFObject("./assets/dance.gif", 300),
+}
 
-    def overlay_next_frame(self, target_frame, padding=10, position = "upper-right", size = None):
-        """
-        Overlay the next GIF frame onto the target frame with alpha blending,
-        using the GIF's own timing to control frame advancement.
-        """
-        # --- Handle delta time for GIF frame advancement ---
-        current_time = time.time()
-        delta_time = (current_time - self.last_update_time) * 1000  # ms
-        self.accumulator += delta_time
-        self.last_update_time = current_time
 
-        # Advance frame if accumulated time exceeds current frame's duration
-        while self.accumulator >= self.durations[self.index]:
-            self.accumulator -= self.durations[self.index]
-            self.index = (self.index + 1) % len(self.frames)
+# gif_holder["intro"] = GIFObject("./assets/cropped_ergonomics.gif")
+# gif_holder["bad"] = GIFObject("./assets/car.gif")
+# gif_holder["good"] = GIFObject("./assets/dance.gif", 300)
 
-        gif_frame = self.frames[self.index]
-
-        # Determine maximum allowed size
-        max_w = min(200, target_frame.shape[1] - 2*padding)
-        max_h = min(200, target_frame.shape[0] - 2*padding)
-
-        # Compute scale factor
-        scale_w = max_w / gif_frame.shape[1]
-        scale_h = max_h / gif_frame.shape[0]
-        scale = min(scale_w, scale_h, 1.0)
-
-        # Resize GIF
-        new_w = max(1, int(gif_frame.shape[1] * scale))
-        new_h = max(1, int(gif_frame.shape[0] * scale))
-        gif_frame = cv2.resize(gif_frame, (new_w, new_h))
-
-        if size is not None:
-            gif_frame = cv2.resize(gif_frame, size)
-
-        
-        # --- Determine overlay position (upper-right) ---
-        if position == "upper-right":
-            h_gif, w_gif = gif_frame.shape[:2]
-            y1, y2 = int(padding), int(padding + h_gif)
-            x1, x2 = int(target_frame.shape[1] - w_gif - padding), int(target_frame.shape[1] - padding)
-        elif position == "lower-right":
-            h_gif, w_gif = gif_frame.shape[:2]
-            y1 = int(target_frame.shape[0] - h_gif - padding)  # start at bottom
-            y2 = int(target_frame.shape[0] - padding)
-            x1 = int(target_frame.shape[1] - w_gif - padding)  # same as upper-right
-            x2 = int(target_frame.shape[1] - padding)
-
-        # --- Alpha blending ---
-        alpha_gif = gif_frame[:, :, 3] / 255.0
-        alpha_frame = 1.0 - alpha_gif
-        for c in range(3):  # BGR channels only
-            target_frame[y1:y2, x1:x2, c] = (
-                alpha_gif * gif_frame[:, :, c] + alpha_frame * target_frame[y1:y2, x1:x2, c]
-            )
-
-intro_gif = GIFObject("./assets/cropped_ergonomics.gif")
-bad_gif = GIFObject("./assets/car.gif")
-good_gif = GIFObject("./assets/dance.gif", 300)
-wrench_png = GIFObject("./assets/wrench.png")
 # Sound Setup
 pygame.mixer.init()
 sounds = {
@@ -235,7 +169,7 @@ prev_status = stable_status
 
 # Configuration Window Setup
 class SettingsWindow:
-    def __init__(self, title="Settings", width=600, height=400):
+    def __init__(self,sounds, gif_holder, title="Settings", width=600, height=400):
         self.title = title
         self.width = width
         self.height = height
@@ -255,6 +189,8 @@ class SettingsWindow:
             "./assets/placeholder.mp3"  # good sound
         ]
 
+        self.sounds = sounds
+        self.gif_holder = gif_holder
         # Store preview widgets
         self.preview_labels = []
 
@@ -264,7 +200,7 @@ class SettingsWindow:
         self.app = None
         self.calibration_data = None
         self.settings_data = None
-      
+
     def spawn(self):
         """Spawn the Tkinter window in a separate thread."""
         if self.window_thread is None or not self.window_thread.is_alive():
@@ -273,146 +209,155 @@ class SettingsWindow:
             self.window_thread.start()
 
     def _run_window(self):
-        # ---------- Only CTkToplevel ----------
-        window = ctk.CTkToplevel()
-        window.title(self.title)
-        window.geometry("800x400")
-        window.resizable(False, False)
+        self._build_window()
+        self._build_scroll_area()
 
-        ctk.CTkLabel(window, text="Settings", font=ctk.CTkFont(size=16, weight="bold")).pack(pady=5)
+        self._build_audio_section()
+        self._build_import_section()
+        self._build_image_section()
+        self._build_close_button()
 
-        # ---------- Scrollable frame ----------
-        scrollable_frame = ctk.CTkScrollableFrame(window, width=580, height=320)
-        scrollable_frame.pack(padx=10, pady=5, fill="both", expand=True)
+    def _build_window(self):
+        self.window = ctk.CTkToplevel()
+        self.window.title(self.title)
+        self.window.geometry("800x400")
+        self.window.resizable(False, False)
 
-        main_content_frame = ctk.CTkFrame(scrollable_frame, bg_color= 'gray')
-        main_content_frame.pack(pady=10, anchor="n")
+        ctk.CTkLabel(
+            self.window, 
+            text="Settings",
+            font=ctk.CTkFont(size=16, weight="bold")
+        ).pack(pady=5)
 
-        left_side_frame = ctk.CTkFrame(main_content_frame)
-        left_side_frame.pack(side="left", padx=20, pady=10, anchor='n')
-        # -------- AUDIO SECTION --------
-        audio_frame = ctk.CTkFrame(left_side_frame)
+    def _build_scroll_area(self):
+        self.scrollable_frame = ctk.CTkScrollableFrame(self.window, width=580, height=320)
+        self.scrollable_frame.pack(padx=10, pady=5, fill="both", expand=True)
+
+        self.main_content_frame = ctk.CTkFrame(self.scrollable_frame, bg_color='gray')
+        self.main_content_frame.pack(pady=10, anchor="n")
+
+        self.left_side_frame = ctk.CTkFrame(self.main_content_frame)
+        self.left_side_frame.pack(side="left", padx=20, pady=10, anchor='n')
+    
+    def _build_audio_section(self):
+        audio_frame = ctk.CTkFrame(self.left_side_frame)
         audio_frame.pack(anchor='n')
 
-        ctk.CTkLabel(audio_frame, text="Audio Files", font=ctk.CTkFont(size=13),bg_color= "#cfcfcf").pack(fill='x', pady=5)
+        ctk.CTkLabel(audio_frame, text="Audio Files", font=ctk.CTkFont(size=13),
+                    bg_color="#cfcfcf").pack(fill='x', pady=5)
 
-        audio_content_frame = ctk.CTkFrame(audio_frame, fg_color= "#dbdbdb")
-        audio_content_frame.pack()
+        content = ctk.CTkFrame(audio_frame, fg_color="#dbdbdb")
+        content.pack()
 
-        self.audio_labels = []  # store label widgets
+        self.audio_labels = []
+        posture_lbl = ["Bad Posture Audio", "Good Posture Audio"]
 
         for i in range(2):
-            if i == 0:
-                posture_lbl = "Bad Posture Audio"
-            elif i == 1:
-                posture_lbl = "Good Posture Audio"
-            # --- Top row: buttons ---
-            ctk.CTkButton(
-                audio_content_frame,
-                text=f"Select {posture_lbl}",
-                width=200,
-                command=lambda x=i: self.select_audio(x),
-                bg_color= '#dbdbdb'
-            ).grid(row=i*2, column=0, padx=5, pady=(5, 0))
+            ctk.CTkButton(content, text=f"Select {posture_lbl[i]}", width=200,
+                        command=lambda x=i: self.select_audio(x),
+                        bg_color='#dbdbdb').grid(row=i*2, column=0, padx=5, pady=(5, 0))
 
-            ctk.CTkButton(
-                audio_content_frame,
-                text="Play",
-                width=60,
-                command=lambda x=i: self.play_audio(x),
-                bg_color= '#dbdbdb'
-            ).grid(row=i*2, column=1, padx=3)
+            ctk.CTkButton(content, text="Play", width=60,
+                        command=lambda x=i: self.play_audio(x),
+                        bg_color='#dbdbdb').grid(row=i*2, column=1, padx=3)
 
-            ctk.CTkButton(
-                audio_content_frame,
-                text="Stop",
-                width=60,
-                command=self.stop_audio,
-                bg_color= '#dbdbdb'
-            ).grid(row=i*2, column=2, padx=3)
+            ctk.CTkButton(content, text="Stop", width=60,
+                        command=self.stop_audio,
+                        bg_color='#dbdbdb').grid(row=i*2, column=2, padx=3)
 
-            # --- Bottom row: filename preview (small, does not stretch UI) ---
-            
-            base_filename = os.path.basename(self.audio_files[i])
-            label = ctk.CTkLabel(
-                audio_content_frame,
-                text=f"{posture_lbl} Loaded: {base_filename}",
-                font=ctk.CTkFont(size=11),
-                anchor="w"
-            )
-            label.grid(row=i*2 + 1, column=0, columnspan=3, sticky="w", padx=5, pady=(0, 5))
+            base = os.path.basename(self.audio_files[i])
+            label = ctk.CTkLabel(content, text=f"{posture_lbl[i]} Loaded: {base}",
+                                font=ctk.CTkFont(size=11), anchor="w")
+            label.grid(row=i*2+1, column=0, columnspan=3, sticky="w", padx=5, pady=(0, 5))
 
             self.audio_labels.append(label)
+    def _build_import_section(self):
+        import_frame = ctk.CTkFrame(self.left_side_frame)
+        import_frame.pack(anchor='n', pady=10, fill='x')
 
-        # -------- SAVE CONFIG SECTION
-        import_frames = ctk.CTkFrame(left_side_frame)
-        import_frames.pack(anchor='n', pady=10, fill = 'x')
-        ctk.CTkLabel(import_frames, text="Import Files", font=ctk.CTkFont(size=13), bg_color= "#cfcfcf").pack(fill='x', pady=5)
-        self.calibration_lbl = ctk.CTkLabel(import_frames, text= f"Calibration File: ")
-        self.calibration_lbl.pack()
-        calibration_frame = ctk.CTkFrame(import_frames, fg_color="#dbdbdb")
-        calibration_frame.pack()
-        ctk.CTkButton(calibration_frame, text="Import", width=100, command= self.load_calibration ).pack(side= 'left', pady=5, padx = 10)
-        ctk.CTkButton(calibration_frame, text="Save", width=100, command= self.save_calibration ).pack(side= 'left', pady=5, padx = 10)
-        self.settings_lbl = ctk.CTkLabel(import_frames, text= f"Settings File: ")
-        self.settings_lbl.pack()
-        setting_frame = ctk.CTkFrame(import_frames, fg_color="#dbdbdb")
-        setting_frame.pack()
-        ctk.CTkButton(setting_frame, text="Import", width=100, command= self.load_settings).pack(side= 'left', pady=5, padx = 10)
-        ctk.CTkButton(setting_frame, text="Save", width=100, command= self.save_settings).pack(side= 'left', pady=5, padx = 10)
-        # -------- IMAGE SECTION --------
-        image_frame = ctk.CTkFrame(main_content_frame)
+        ctk.CTkLabel(import_frame, text="Import Files",
+                    font=ctk.CTkFont(size=13), bg_color="#cfcfcf").pack(fill='x')
+
+        self.calibration_lbl = ctk.CTkLabel(import_frame, text="Calibration File:")
+        self.calibration_lbl.pack(pady=3)
+
+        cal_frame = ctk.CTkFrame(import_frame, fg_color="#dbdbdb")
+        cal_frame.pack()
+
+        ctk.CTkButton(cal_frame, text="Import", width=100,
+                    command=self.load_calibration).pack(side='left', pady=5, padx=10)
+
+        ctk.CTkButton(cal_frame, text="Save", width=100,
+                    command=self.save_calibration).pack(side='left', pady=5, padx=10)
+
+        self.settings_lbl = ctk.CTkLabel(import_frame, text="Settings File:")
+        self.settings_lbl.pack(pady=3)
+
+        set_frame = ctk.CTkFrame(import_frame, fg_color="#dbdbdb")
+        set_frame.pack()
+
+        ctk.CTkButton(set_frame, text="Import", width=100,
+                    command=self.load_settings).pack(side='left', pady=5, padx=10)
+
+        ctk.CTkButton(set_frame, text="Save", width=100,
+                    command=self.save_settings).pack(side='left', pady=5, padx=10)
+    def _build_image_section(self):
+        image_frame = ctk.CTkFrame(self.main_content_frame)
         image_frame.pack(side="left", padx=20, pady=10, anchor='n')
 
-        ctk.CTkLabel(image_frame, text="Images (GIF/PNG)", font=ctk.CTkFont(size=13)).pack(pady=5)
+        ctk.CTkLabel(image_frame, text="Images (GIF/PNG)",
+                    font=ctk.CTkFont(size=13)).pack(pady=5)
 
-        image_content_frame = ctk.CTkFrame(image_frame)
-        image_content_frame.pack()
+        content = ctk.CTkFrame(image_frame)
+        content.pack()
 
-        self.preview_labels = []      # for the image preview widgets
-        self.filename_labels = []     # for the filename labels
+        self.preview_labels = []
+        self.filename_labels = []
+
+        posture_lbl = ["Intro Img", "Bad Posture Img", "Good Posture Img"]
 
         for i in range(3):
-            posture_lbl = ["Intro Img", "Bad Posture Img", "Good Posture Img"]
-            # --- Select Button ---
-            ctk.CTkButton(
-                image_content_frame,
-                text=f"Select Image {i+1}",
-                width=120,
-                command=lambda x=i: self.select_image(x)
-            ).grid(row=i*2, column=0, padx=5, pady=(5, 0))
+            ctk.CTkButton(content, text=f"Select Image {i+1}",
+                        width=120, command=lambda x=i: self.select_image(x)
+                        ).grid(row=i*2, column=0, padx=5, pady=(5, 0))
 
-            # --- Preview ---
-            preview = ctk.CTkLabel(image_content_frame, text="[Preview]", fg_color="#ddd", width=120, height=80)
+            preview = ctk.CTkLabel(content, text="[Preview]",
+                                fg_color="#ddd", width=120, height=80)
             preview.grid(row=i*2, column=1, padx=10, pady=(5, 0))
             self.preview_labels.append(preview)
 
-            # --- Filename Label below the preview ---
-            fname_label = ctk.CTkLabel(image_content_frame, text=f"{posture_lbl[i]}", font=ctk.CTkFont(size=10), anchor="w")
-            fname_label.grid(row=i*2+1, column=0, columnspan=2, sticky="w", padx=5, pady=(0, 5))
-            self.filename_labels.append(fname_label)
+            label = ctk.CTkLabel(content, text=posture_lbl[i],
+                                font=ctk.CTkFont(size=10), anchor="w")
+            label.grid(row=i*2+1, column=0, columnspan=2,
+                    sticky="w", padx=5, pady=(0, 5))
+            self.filename_labels.append(label)
 
-        # --- Load default previews and update filename labels ---
+        # Load defaults
         for i, path in enumerate(self.image_files):
             try:
                 self.show_preview(i, path)
-                filename = os.path.basename(path)
-                self.filename_labels[i].configure(text=f"{posture_lbl[i]} : {filename}")
-            except:
-                pass
+                fname = os.path.basename(path)
+                self.filename_labels[i].configure(text=f"{posture_lbl[i]} : {fname}")
+            except Exception as e:
+                print("Image preview error:", e)
+    def _build_close_button(self):
+        close_frame = ctk.CTkFrame(self.scrollable_frame)
+        close_frame.pack(pady=10)
+
+        ctk.CTkButton(close_frame, text="Close",
+                    width=200,
+                    command=self.window.destroy).pack()
 
 
-        # ---------- CLOSE BUTTON ----------
-        closing_frame = ctk.CTkFrame(scrollable_frame)
-        closing_frame.pack(anchor='n', pady=10)
-        ctk.CTkButton(closing_frame, text="Close", width=200, command=window.destroy).pack()
+
+
+
         
     # -------------------------------------------------------
     #                   AUDIO FUNCTIONS
     # -------------------------------------------------------
 
     def select_audio(self, index):
-        global sounds
         path = filedialog.askopenfilename(
             title="Select audio file",
             filetypes=[("Audio Files", "*.mp3 *.wav")]
@@ -428,9 +373,9 @@ class SettingsWindow:
 
             print(f"Loaded audio {index+1}: {path}")
             if index == 0:
-                sounds["bad"] = pygame.mixer.Sound(path)
+                self.sounds["bad"] = pygame.mixer.Sound(path)
             elif index == 1:
-                sounds["good"] = pygame.mixer.Sound(path)
+                self.sounds["good"] = pygame.mixer.Sound(path)
 
 
     def play_audio(self, index):
@@ -462,14 +407,11 @@ class SettingsWindow:
             filename = os.path.basename(path)
             self.filename_labels[index].configure(text=f"{posture_lbl[index]} : {filename}")
             if index == 0:
-                global intro_gif
-                intro_gif = GIFObject(path)
+                self.gif_holder["intro"] = GIFObject(path)
             elif index == 1:
-                global bad_gif
-                bad_gif = GIFObject(path)
+                self.gif_holder["bad"] = GIFObject(path)
             elif index == 2:
-                global good_gif
-                good_gif = GIFObject(path)
+                self.gif_holder["good"] = GIFObject(path)
 
     def show_preview(self, index, filepath):
         img = Image.open(filepath)
@@ -535,7 +477,6 @@ class SettingsWindow:
             print(f"Settings saved to {path}")
             self.settings_lbl.configure(text= f"Settings File: {os.path.basename(original_path)}")
     def load_settings(self):
-        global sounds
         path = filedialog.askopenfilename(
             filetypes=[("JSON Files", "*.json")],
             title="Load Settings"
@@ -552,9 +493,9 @@ class SettingsWindow:
                 base_filename = os.path.basename(path)
                 self.audio_labels[i].configure(text=f"{posture_lbl[i]} Loaded: {base_filename}")
                 if i == 0:
-                    sounds["bad"] = pygame.mixer.Sound(path)
+                    self.sounds["bad"] = pygame.mixer.Sound(path)
                 elif i == 1:
-                    sounds["good"] = pygame.mixer.Sound(path)
+                    self.sounds["good"] = pygame.mixer.Sound(path)
             # Load image files and update previews
             self.image_files = loaded.get("images", self.image_files)
             posture_lbl_img = ["Intro Img", "Bad Posture Img", "Good Posture Img"]
@@ -563,14 +504,11 @@ class SettingsWindow:
                 filename = os.path.basename(path)
                 self.filename_labels[i].configure(text=f"{posture_lbl_img[i]} : {filename}")
                 if i == 0:
-                    global intro_gif
-                    intro_gif = GIFObject(path)
+                    self.gif_holder["intro"] = GIFObject(path)
                 elif i == 1:
-                    global bad_gif
-                    bad_gif = GIFObject(path)
+                    self.gif_holder["bad"] = GIFObject(path)
                 elif i == 2:
-                    global good_gif
-                    good_gif = GIFObject(path)
+                    self.gif_holder["good"] = GIFObject(path)
             print(f"Settings loaded from {path}")
             self.settings_lbl.configure(text= f"Settings File: {os.path.basename(original_path)}")
 
@@ -585,7 +523,7 @@ def click_event(event, x, y, flags, param):
             settings.spawn()
 app = ctk.CTk()
 app.withdraw()
-settings = SettingsWindow()
+settings = SettingsWindow(sounds= sounds, gif_holder= gif_holder)
 cv_thread = Thread(target=run_posture_detection, daemon=True)
 cv_thread.start()
 
