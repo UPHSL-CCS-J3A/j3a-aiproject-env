@@ -3,14 +3,14 @@ import pygame
 import customtkinter as ctk
 import os
 from tkinter import filedialog
-from GIFObject import GIFObject
 from PIL import Image
 import json
+from config import *
 class SettingsWindow:
-    def __init__(self,sounds, gif_holder, ref_values, title="Settings", width=600, height=400):
+    def __init__(self,sounds, gif_holder, ref_values, title="Settings"):
         self.title = title
-        self.width = width
-        self.height = height
+        self.width = WIDTH
+        self.height = HEIGHT
 
         self.window_thread = None
 
@@ -47,6 +47,8 @@ class SettingsWindow:
             self.window_thread.daemon = True
             self.window_thread.start()
 
+    def attach_detector(self, detector):
+        self.detector = detector
     def _run_window(self):
         self._build_window()
         self._build_scroll_area()
@@ -212,9 +214,9 @@ class SettingsWindow:
 
             print(f"Loaded audio {index+1}: {path}")
             if index == 0:
-                self.sounds["bad"] = pygame.mixer.Sound(path)
+                self.sounds["bad"] = path
             elif index == 1:
-                self.sounds["good"] = pygame.mixer.Sound(path)
+                self.sounds["good"] = path
 
 
     def play_audio(self, index):
@@ -246,11 +248,14 @@ class SettingsWindow:
             filename = os.path.basename(path)
             self.filename_labels[index].configure(text=f"{posture_lbl[index]} : {filename}")
             if index == 0:
-                self.gif_holder["intro"] = GIFObject(path)
+                self.detector.update_gif("intro", path)
+                self.gif_holder["intro"] = path
             elif index == 1:
-                self.gif_holder["bad"] = GIFObject(path)
+                self.detector.update_gif("bad", path)
+                self.gif_holder["bad"] = path
             elif index == 2:
-                self.gif_holder["good"] = GIFObject(path)
+                self.detector.update_gif("good", path)
+                self.gif_holder["good"] = path
 
     def show_preview(self, index, filepath):
         img = Image.open(filepath)
@@ -331,9 +336,11 @@ class SettingsWindow:
                 base_filename = os.path.basename(path)
                 self.audio_labels[i].configure(text=f"{posture_lbl[i]} Loaded: {base_filename}")
                 if i == 0:
-                    self.sounds["bad"] = pygame.mixer.Sound(path)
+                    self.detector.update_sound("bad", path)
+                    self.sounds["bad"] = path
                 elif i == 1:
-                    self.sounds["good"] = pygame.mixer.Sound(path)
+                    self.detector.update_sound("good", path)
+                    self.sounds["good"] = path
             # Load image files and update previews
             self.image_files = loaded.get("images", self.image_files)
             posture_lbl_img = ["Intro Img", "Bad Posture Img", "Good Posture Img"]
@@ -342,10 +349,13 @@ class SettingsWindow:
                 filename = os.path.basename(path)
                 self.filename_labels[i].configure(text=f"{posture_lbl_img[i]} : {filename}")
                 if i == 0:
-                    self.gif_holder["intro"] = GIFObject(path)
+                    self.detector.update_gif("intro", path)
+                    self.gif_holder["intro"] = path
                 elif i == 1:
-                    self.gif_holder["bad"] = GIFObject(path)
+                    self.detector.update_gif("bad", path)
+                    self.gif_holder["bad"] = path
                 elif i == 2:
-                    self.gif_holder["good"] = GIFObject(path)
+                    self.detector.update_gif("good", path)
+                    self.gif_holder["good"] = path
             print(f"Settings loaded from {path}")
             self.settings_lbl.configure(text= f"Settings File: {os.path.basename(original_path)}")

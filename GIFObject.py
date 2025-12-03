@@ -3,9 +3,19 @@ import time
 import cv2
 import numpy as np
 class GIFObject:
-    def __init__(self, path, default_duration=100):
+    def __init__(self, path):
         self.gif = Image.open(path)
         self.frames = []
+        
+        self.index = 0
+        self.last_update_time = time.time()  # timestamp of last frame update
+        self.accumulator = 0.0  # accumulated time in milliseconds
+
+    def overlay_next_frame(self, target_frame, padding=10, position = "upper-right", size = None, default_duration=100):
+        """
+        Overlay the next GIF frame onto the target frame with alpha blending,
+        using the GIF's own timing to control frame advancement.
+        """
         self.durations = []
         try:
             while True:
@@ -16,15 +26,6 @@ class GIFObject:
                 self.gif.seek(self.gif.tell() + 1)
         except EOFError:
             pass
-        self.index = 0
-        self.last_update_time = time.time()  # timestamp of last frame update
-        self.accumulator = 0.0  # accumulated time in milliseconds
-
-    def overlay_next_frame(self, target_frame, padding=10, position = "upper-right", size = None):
-        """
-        Overlay the next GIF frame onto the target frame with alpha blending,
-        using the GIF's own timing to control frame advancement.
-        """
         # --- Handle delta time for GIF frame advancement ---
         current_time = time.time()
         delta_time = (current_time - self.last_update_time) * 1000  # ms
