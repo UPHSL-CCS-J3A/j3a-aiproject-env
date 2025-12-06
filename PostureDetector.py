@@ -4,6 +4,7 @@ import cv2
 import mediapipe as mp
 import time
 import pygame
+from threading import Thread, Lock
 from GIFObject import GIFObject
 from config import (
     BUTTON_W, BUTTON_H, PADDING,
@@ -40,6 +41,8 @@ class PostureDetector:
         self.settings = settings
         self.app = app
         self.running = True
+        self.lock = Lock()
+        self.cv_thread = None
 
         # Initialize MediaPipe Pose
         self.mp_pose = mp.solutions.pose
@@ -61,10 +64,6 @@ class PostureDetector:
         self.statuschange_starttime = None
         self.prev_status = self.stable_status
         self.action = self.stable_action
-        
-        # Setup OpenCV window
-        cv2.namedWindow("Posture Detection")
-        cv2.setMouseCallback("Posture Detection", self._click_event, param=self.params)
 
     # ========================================================================
     # EVENT HANDLERS
@@ -238,89 +237,97 @@ class PostureDetector:
     # MAIN PROCESSING LOOP
     # ========================================================================
     
-    def process_frame(self):
-        """Process a single frame from the webcam."""
-        if not self.running:
-            return
+    def _cv_loop(self):
+        """OpenCV processing loop running in separate thread."""
+        # Setup OpenCV window in the thread
+        cv2.namedWindow("Posture Detection")
+        cv2.setMouseCallback("Posture Detection", self._click_event, param=self.params)
         
-        # Capture frame
-        ret, frame = self.cap.read()
-        if not ret:
-            self.stop()
-            return
-        
-        h, w = frame.shape[:2]
-        img = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        res = self.pose.process(img)
-        
-        if res.pose_landmarks:
-            # Draw pose landmarks
-            self.mp_draw.draw_landmarks(frame, res.pose_landmarks, self.mp_pose.POSE_CONNECTIONS)
-            lm = res.pose_landmarks.landmark
+        while self.running:
+            # Capture frame
+            ret, frame = self.cap.read()
+            if not ret:
+                break
             
-            # Extract key landmarks
-            L = lm[self.mp_pose.PoseLandmark.LEFT_SHOULDER]
-            R = lm[self.mp_pose.PoseLandmark.RIGHT_SHOULDER]
-            nose = lm[self.mp_pose.PoseLandmark.NOSE]
+            h, w = frame.shape[:2]
+            img = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            res = self.pose.process(img)
             
-            # Convert to pixel coordinates
-            L_px = (int(L.x * w), int(L.y * h))
-            R_px = (int(R.x * w), int(R.y * h))
-            nose_px = (int(nose.x * w), int(nose.y * h))
-            neck_px = ((L_px[0] + R_px[0]) // 2, (L_px[1] + R_px[1]) // 2)
-            
-            # Calculate posture metrics
-            shoulder_y = (L.y + R.y) / 2
-            nose_shoulder_dist = abs(nose.y - shoulder_y)
-            
-            # Determine posture status
-            status, self.action = self._calculate_posture_status(nose, shoulder_y, nose_shoulder_dist)
-            color = self._get_status_color(status)
-            
-            # Handle audio feedback
-            self._handle_audio_feedback(status)
-            
-            # Overlay GIF based on status
-            if status == "BAD POSTURE":
-                self.gif_holder["bad"].overlay_next_frame(frame)
-            elif status == "GOOD POSTURE":
-                self.gif_holder["good"].overlay_next_frame(frame)
-            
-            # Draw visual feedback
-            self._draw_pose_overlay(frame, L_px, R_px, nose_px, neck_px, color)
-            self._draw_status_text(frame, status, nose_shoulder_dist, 50, color)
-            self._draw_settings_button(frame, w, h)
-            
-            # Show intro GIF if not calibrated
-            if not self.ref_values["calibrated"]:
-                self.gif_holder["intro"].overlay_next_frame(frame, 0.65)
-
-        # Display frame
-        cv2.imshow('Posture Detection', frame)
-        
-        # Handle keyboard input
-        key = cv2.waitKey(1) & 0xFF
-        if key == ord('q'):
-            self.stop()
-        elif key in [ord('c'), ord('r')]:
             if res.pose_landmarks:
-                self._calibrate(res.pose_landmarks)
+                # Draw pose landmarks
+                self.mp_draw.draw_landmarks(frame, res.pose_landmarks, self.mp_pose.POSE_CONNECTIONS)
+                lm = res.pose_landmarks.landmark
+                
+                # Extract key landmarks
+                L = lm[self.mp_pose.PoseLandmark.LEFT_SHOULDER]
+                R = lm[self.mp_pose.PoseLandmark.RIGHT_SHOULDER]
+                nose = lm[self.mp_pose.PoseLandmark.NOSE]
+                
+                # Convert to pixel coordinates
+                L_px = (int(L.x * w), int(L.y * h))
+                R_px = (int(R.x * w), int(R.y * h))
+                nose_px = (int(nose.x * w), int(nose.y * h))
+                neck_px = ((L_px[0] + R_px[0]) // 2, (L_px[1] + R_px[1]) // 2)
+                
+                # Calculate posture metrics
+                shoulder_y = (L.y + R.y) / 2
+                nose_shoulder_dist = abs(nose.y - shoulder_y)
+                
+                # Determine posture status
+                with self.lock:
+                    status, self.action = self._calculate_posture_status(nose, shoulder_y, nose_shoulder_dist)
+                    color = self._get_status_color(status)
+                
+                # Handle audio feedback
+                self._handle_audio_feedback(status)
+                
+                # Overlay GIF based on status
+                if status == "BAD POSTURE":
+                    self.gif_holder["bad"].overlay_next_frame(frame)
+                elif status == "GOOD POSTURE":
+                    self.gif_holder["good"].overlay_next_frame(frame)
+                
+                # Draw visual feedback
+                self._draw_pose_overlay(frame, L_px, R_px, nose_px, neck_px, color)
+                self._draw_status_text(frame, status, nose_shoulder_dist, 50, color)
+                self._draw_settings_button(frame, w, h)
+                
+                # Show intro GIF if not calibrated
+                if not self.ref_values["calibrated"]:
+                    self.gif_holder["intro"].overlay_next_frame(frame, 0.65)
+
+            # Display frame
+            cv2.imshow('Posture Detection', frame)
+            
+            # Process OpenCV window events
+            key = cv2.waitKey(1) & 0xFF
+            
+            # Handle keyboard input
+            if key == ord('q'):
+                self.running = False
+                break
+            elif key in [ord('c'), ord('r')]:
+                if res.pose_landmarks:
+                    with self.lock:
+                        self._calibrate(res.pose_landmarks)
         
-        # Schedule next frame
-        self.app.after(1, self.process_frame)
+        # Cleanup
+        self.cap.release()
+        cv2.destroyAllWindows()
+        self.app.after(0, self.app.destroy)
     
     # ========================================================================
     # LIFECYCLE METHODS
     # ========================================================================
     
     def start(self):
-        """Start the posture detection loop."""
+        """Start the posture detection loop in a separate thread."""
         self.running = True
-        self.process_frame()
+        self.cv_thread = Thread(target=self._cv_loop, daemon=True)
+        self.cv_thread.start()
     
     def stop(self):
         """Stop the posture detection and cleanup resources."""
         self.running = False
-        self.cap.release()
-        cv2.destroyAllWindows()
-        self.app.destroy()
+        if self.cv_thread and self.cv_thread.is_alive():
+            self.cv_thread.join(timeout=1.0)

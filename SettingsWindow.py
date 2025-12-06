@@ -73,16 +73,30 @@ class SettingsWindow:
 
     def _build_window(self):
         """Create the main settings window."""
-        self.window = ctk.CTkToplevel()
+        self.window = ctk.CTkToplevel(self.app)
         self.window.title(self.title)
         self.window.geometry("800x400")
-        self.window.resizable(False, False)
+        self.window.resizable(True, True)
+        
+        # Prevent window from closing the entire app
+        self.window.protocol("WM_DELETE_WINDOW", self._on_closing)
+        
+        # Keep window on top initially but allow normal behavior
+        self.window.attributes('-topmost', False)
+        self.window.lift()
+        self.window.focus_force()
 
         ctk.CTkLabel(
             self.window,
             text="Settings",
             font=ctk.CTkFont(size=16, weight="bold")
         ).pack(pady=5)
+    
+    def _on_closing(self):
+        """Handle window close event without closing the main app."""
+        if self.window:
+            self.window.destroy()
+            self.window = None
 
     def _build_scroll_area(self):
         """Create the scrollable content area."""
