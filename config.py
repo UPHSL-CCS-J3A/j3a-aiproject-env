@@ -1,5 +1,18 @@
 """Configuration file for Posture Detection System."""
 
+import os
+import sys
+
+# Get the correct base path for assets (works for both dev and exe)
+if getattr(sys, 'frozen', False):
+    # Running as compiled executable
+    BASE_PATH = sys._MEIPASS  # PyInstaller temp folder
+else:
+    # Running as script
+    BASE_PATH = os.path.dirname(os.path.abspath(__file__))
+
+ASSETS_PATH = os.path.join(BASE_PATH, 'assets')
+
 # ============================================================================
 # UI CONSTANTS
 # ============================================================================
@@ -31,16 +44,20 @@ GIF_KEYS = ["intro", "bad", "good"]
 # ============================================================================
 # ASSET PATHS
 # ============================================================================
+def get_asset_path(filename):
+    """Get the correct path for an asset file."""
+    return os.path.join(ASSETS_PATH, filename)
+
 gif_holder = {
-    "intro": "./assets/cropped_ergonomics.gif",
-    "bad": "./assets/car.gif",
-    "good": "./assets/dance.gif",
-    "wrench": "./assets/wrench.png",
+    "intro": get_asset_path("cropped_ergonomics.gif"),
+    "bad": get_asset_path("car.gif"),
+    "good": get_asset_path("dance.gif"),
+    "wrench": get_asset_path("wrench.png"),
 }
 
 sounds = {
-    "bad": "./assets/laugh.mp3",
-    "good": "./assets/placeholder.mp3"
+    "bad": get_asset_path("laugh.mp3"),
+    "good": get_asset_path("placeholder.mp3")
 }
 
 

@@ -1,2 +1,7 @@
-mediapipe
-opencv-python
+opencv-python>=4.8.0
+mediapipe>=0.10.0
+pygame>=2.5.0
+customtkinter>=5.2.0
+Pillow>=10.0.0
+numpy>=1.24.0
+pyinstaller>=6.0.0
