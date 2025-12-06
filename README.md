@@ -1,5 +1,13 @@
 # **GROUP .ENV: Real-Time Posture Detection**
 
+## Documentation Link
+`Click Here ->`
+[Google Docs Link](https://docs.google.com/document/d/1sJkZqmhtHJWSdU9Pu-WKlFU069b5qBsD/edit?usp=sharing&ouid=101178444166492044070&rtpof=true&sd=true)
+
+## Presentation Link
+`Click Here ->`
+[Canva Presentation Link](https://www.canva.com/design/DAG5Yt2qrMo/JMY8pqkjFTPp2zy5P4kF1A/edit?utm_content=DAG5Yt2qrMo&utm_campaign=designshare&utm_medium=link2&utm_source=sharebutton)
+
 ## Problem Statement
 > - Poor posture is a common problem among students, office workers, and computer users. Sitting for long periods with bad posture can cause back pain, neck strain, and long-term spinal issues. Many users are unaware when they start slouching. This AI system aims to detect poor posture in real time and alert the user before health issues develop.
 
@@ -10,7 +18,7 @@
 ## PEAS Model
 |Performance Measure | Environment | Actuators | Sensors | 
 | ------ | ------ | ------ | ------ |
-| Posture detection accuracy (correct classification of good vs. bad posture), real-time responsiveness, and user awareness (how often users correct their posture after feedback). | Virtual environment using the user’s webcam feed in real time. Operates indoors with stable lighting and a clear upper-body view. | Visual display through the OpenCV window: colored lines, posture labels ("GOOD" / "BAD"), and optional text instructions for calibration. | Webcam camera acts as the main sensor; MediaPipe Pose extracts key landmark coordinates (nose, left shoulder, right shoulder). | 
+| Posture detection accuracy (correct classification of good vs. bad posture), real-time responsiveness/latency (time from posture change to feedback), and user awareness/behavioral change (how often users correct their posture after feedback). | A Partially Observable, Dynamic indoor setting where the user is performing a desk task. The user can be sitting or standing. The primary constraint is a clear camera view of the left and right shoulders. The system is robust enough to tolerate partial face obstruction (e.g., masks). | Visual Display (OpenCV window showing colored lines and posture labels "GOOD POSTURE"/"BAD POSTURE") AND Auditory Alert/Sound (to immediately alert the user when their posture is classified as bad). | Webcam Camera (main sensor) and MediaPipe Pose, which extracts key landmark coordinates, specifically focusing on the left and right shoulders. It utilizes its occlusion handling and prediction capabilities to reliably estimate the center of the face/nose even when it is partially obscured or not fully visible. | 
 
 ## AI Concepts Used
 | Intelligent Agent Type | Search or Optimization Strategy | Learning or Decision Component (if applicable) | 
@@ -21,25 +29,30 @@
 
 ```mermaid
 graph TD
-    A(Start) --> B[Open / Activate Camera]
-    B --> C[Detect Pose → Nose and Shoulder]
-    C --> D{Is 'C' Key Pressed?}
-    D -->|Yes| E[Calibrate and Store Reference]
-    E --> F
-    D -->|No| F[Compare Current Posture to Reference]
-    F --> G{Is Deviation < 0.02?}
-    G -->|Yes| H[Display GOOD POSTURE]
-    G -->|No| I[Display BAD POSTURE]
+
+    User((User)) -->|Body posture| Cam[Webcam Camera]
+
+    Cam --> Detect[Pose Detection Module]
+
+    Detect --> Analysis[Posture Analysis Module]
+
+    User -->|Press 'C' Key| Calib[Calibration Module]
+    Calib --> Analysis
+
+    Analysis --> Decision{Deviation < 0.02?}
+
+    Decision -->|Yes| Good[Show GOOD POSTURE]
+    Decision -->|No| Bad[Show BAD POSTURE]
+
+    Bad -->Beep[Play Custom Sound]
+
+    Good --> User
+    Beep --> User
+
 ```
 
 ## Contributors
-### Presenters
 - Zyrus Alvez
+- Allan John Funelas
 - France Raphael Rivera
 - Richard Torculas
-### Presentation Creator
-- Allan John Funelas
-
-## Presentation Link
-`Click Here ->`
-[Canva Presentation Link](https://www.canva.com/design/DAG2y6pdYQY/ScdPUmw5GfVrm7Tsbt9qoQ/edit?utm_content=DAG2y6pdYQY&utm_campaign=designshare&utm_medium=link2&utm_source=sharebutton)
